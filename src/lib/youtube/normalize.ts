@@ -1,3 +1,6 @@
+// YouTube 원본 응답을 정규화 타입으로 바꾸는 순수 함수.
+// 서버 전용 코드(API 키, fetch)가 없어서 mock fixture나 테스트에서도 그대로 쓸 수 있다.
+
 import type {
   Channel,
   Video,
@@ -61,6 +64,8 @@ export function toVideo(raw: YtVideo, channels: Map<string, Channel>): Video {
     durationSec: parseDuration(raw.contentDetails?.duration),
     viewCount: toNumber(raw.statistics?.viewCount) ?? 0,
     categoryId: snippet?.categoryId ?? '',
+    // 다른 필드와 달리 "없으면 가능"으로 둔다. 대부분의 영상은 임베드가 가능하고,
+    // false로 두면 status 정보가 빠졌을 때 모든 영상이 재생 불가로 표시되기 때문이다.
     embeddable: raw.status?.embeddable ?? true,
     channel: channels.get(channelId) ?? {
       id: channelId,

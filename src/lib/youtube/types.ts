@@ -1,12 +1,10 @@
-/**
- * YouTube 관련 타입 정의.
- *
- * - 프론트(클라이언트 컴포넌트 포함)는 "정규화 타입"과 "에러 타입"만 사용한다.
- * - "원본 타입"은 서버 코드(src/lib/youtube) 안에서만 쓴다.
- * - 이 파일은 클라이언트에서도 import할 수 있도록 서버 전용 코드를 넣지 않는다.
- *
- * 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/1
- */
+// YouTube 관련 타입 정의.
+//
+// - 프론트(클라이언트 컴포넌트 포함)는 "정규화 타입", "요청 파라미터 타입", "에러 타입"만 사용한다.
+// - "원본 타입"은 서버 코드(src/lib/youtube) 안에서만 쓴다.
+// - 이 파일은 클라이언트에서도 import할 수 있도록 서버 전용 코드를 넣지 않는다.
+//
+// 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/1
 
 /* -------------------------------------------------------------------------- */
 /* 정규화 타입: 프론트에서 사용                                                 */
@@ -51,6 +49,35 @@ export type Page<T> = {
 
 /** 검색 정렬 기준: 관련도 · 최신 · 조회수 */
 export type SearchOrder = 'relevance' | 'date' | 'viewCount';
+
+/* -------------------------------------------------------------------------- */
+/* 요청 파라미터 타입: 서비스 함수 · Route Handler · 프론트 훅에서 공통 사용     */
+/* -------------------------------------------------------------------------- */
+
+export type PopularVideosParams = {
+  categoryId?: string;
+  pageToken?: string;
+  /** 기본 24, 최대 50 */
+  maxResults?: number;
+};
+
+export type SearchVideosParams = {
+  q: string;
+  order?: SearchOrder;
+  /** ISO 8601 (예: 2026-11-03T00:00:00Z). 이 시점 이후 업로드된 영상만 */
+  publishedAfter?: string;
+  pageToken?: string;
+  /** 기본 20, 최대 50 */
+  maxResults?: number;
+};
+
+export type RelatedVideosParams = {
+  categoryId: string;
+  /** 결과에서 뺄 영상 id (보통 지금 보고 있는 영상) */
+  excludeId?: string;
+  /** 기본 20, 최대 50 */
+  maxResults?: number;
+};
 
 /* -------------------------------------------------------------------------- */
 /* 에러 타입                                                                   */

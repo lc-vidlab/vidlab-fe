@@ -1,11 +1,19 @@
 import 'server-only';
 
-import { YouTubeApiError, ytFetch } from './client';
+// YouTube 조회 서비스 함수.
+// Route Handler와 Server Component가 공통으로 호출한다. 클라이언트에서는 import할 수 없다.
+//
+// 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/1
+
+import { ytFetch } from './client';
+import { YouTubeApiError } from './errors';
 import { toChannel, toVideo, toVideoCategory } from './normalize';
 import type {
   Channel,
   Page,
-  SearchOrder,
+  PopularVideosParams,
+  RelatedVideosParams,
+  SearchVideosParams,
   Video,
   VideoCategory,
   YtChannel,
@@ -15,22 +23,29 @@ import type {
   YtVideoCategory,
 } from './types';
 
-/**
- * YouTube 조회 서비스 함수.
- * Route Handler와 Server Component가 공통으로 호출한다. 클라이언트에서는 import할 수 없다.
- *
- * 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/1
- */
-
 const REGION_CODE = 'KR';
 const LANGUAGE = 'ko';
-/** videos.list · channels.list의 id 최대 개수 */
-const MAX_IDS = 50;
+
+/** 한 번에 요청할 수 있는 최대 개수 (maxResults, id 목록 모두) */
+const MAX_PER_REQUEST = 50;
+
+/** 함수별 기본 페이지 크기 */
+const PAGE_SIZE = {
+  popular: 24,
+  search: 20,
+  related: 20,
+} as const;
+
 const VIDEO_PARTS = 'snippet,contentDetails,statistics,status';
+const CHANNEL_PARTS = 'snippet,statistics';
 
 /* -------------------------------------------------------------------------- */
 /* 내부 함수                                                                   */
 /* -------------------------------------------------------------------------- */
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
 
 function chunk<T>(list: T[], size: number): T[][] {
   const result: T[][] = [];
@@ -38,54 +53,61 @@ function chunk<T>(list: T[], size: number): T[][] {
   return result;
 }
 
-/**
- * 영상들의 채널 정보(아바타 · 구독자 수)를 channels.list로 가져온다.
- * 실패해도 영상 목록은 보여줄 수 있도록 빈 결과를 돌려준다.
- */
-async function fetchChannels(videos: YtVideo[]): Promise<Map<string, Channel>> {
-  const ids = [...new Set(videos.map((v) => v.snippet?.channelId).filter(Boolean))] as string[];
-  const map = new Map<string, Channel>();
-  if (ids.length === 0) return map;
+function pageSize(requested: number | undefined, fallback: number): number {
+  return Math.min(requested ?? fallback, MAX_PER_REQUEST);
+}
 
+/**
+ * id 목록으로 videos.list · channels.list를 호출한다.
+ * 50개씩 나눠 동시에 요청하고 결과를 합친다. 응답 순서는 보장하지 않는다.
+ */
+async function fetchByIds<T>(
+  resource: 'videos' | 'channels',
+  part: string,
+  ids: string[],
+): Promise<T[]> {
+  if (ids.length === 0) return [];
+  const responses = await Promise.all(
+    chunk(ids, MAX_PER_REQUEST).map((group) =>
+      ytFetch<YtListResponse<T>>(resource, {
+        part,
+        id: group.join(','),
+        maxResults: MAX_PER_REQUEST,
+      }),
+    ),
+  );
+  return responses.flatMap((res) => res.items ?? []);
+}
+
+/** id 목록으로 영상을 가져온다. 결과는 ids 순서를 따르고, 없는 영상은 빠진다 */
+async function fetchVideosByIds(ids: string[]): Promise<YtVideo[]> {
+  const videos = await fetchByIds<YtVideo>('videos', VIDEO_PARTS, ids);
+  const byId = new Map(videos.map((v) => [v.id, v]));
+  return ids.map((id) => byId.get(id)).filter(isDefined);
+}
+
+/**
+ * id 목록으로 채널 정보(아바타 · 구독자 수)를 가져온다.
+ * 실패해도 영상 목록은 보여줄 수 있도록 빈 결과를 돌려준다.
+ *
+ * SRV-05 메모: 서비스 함수에 'use cache'를 붙이면 이 실패 결과(아바타 없음)도 캐시된다.
+ * 캐시 경계를 정할 때 함께 검토한다.
+ */
+async function fetchChannelsByIds(ids: string[]): Promise<Map<string, Channel>> {
   try {
-    const responses = await Promise.all(
-      chunk(ids, MAX_IDS).map((group) =>
-        ytFetch<YtListResponse<YtChannel>>('channels', {
-          part: 'snippet,statistics',
-          id: group.join(','),
-          maxResults: MAX_IDS,
-        }),
-      ),
-    );
-    for (const res of responses) {
-      for (const raw of res.items ?? []) map.set(raw.id, toChannel(raw));
-    }
+    const channels = await fetchByIds<YtChannel>('channels', CHANNEL_PARTS, ids);
+    return new Map(channels.map((raw) => [raw.id, toChannel(raw)]));
   } catch (err) {
     console.error('[youtube] 채널 정보 보강 실패. 채널 이름만 표시합니다.', err);
+    return new Map();
   }
-  return map;
 }
 
 /** 원본 영상 목록에 채널 정보를 붙여 정규화한다 */
 async function normalizeVideos(raw: YtVideo[]): Promise<Video[]> {
-  const channels = await fetchChannels(raw);
+  const channelIds = [...new Set(raw.map((v) => v.snippet?.channelId).filter(isDefined))];
+  const channels = await fetchChannelsByIds(channelIds);
   return raw.map((v) => toVideo(v, channels));
-}
-
-/** id 목록으로 영상 상세를 가져온다. 순서는 ids 순서를 따르고, 없는 영상은 빠진다 */
-async function fetchVideosByIds(ids: string[]): Promise<YtVideo[]> {
-  if (ids.length === 0) return [];
-  const responses = await Promise.all(
-    chunk(ids, MAX_IDS).map((group) =>
-      ytFetch<YtListResponse<YtVideo>>('videos', {
-        part: VIDEO_PARTS,
-        id: group.join(','),
-        maxResults: MAX_IDS,
-      }),
-    ),
-  );
-  const byId = new Map(responses.flatMap((r) => r.items ?? []).map((v) => [v.id, v]));
-  return ids.map((id) => byId.get(id)).filter((v): v is YtVideo => v !== undefined);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -95,21 +117,17 @@ async function fetchVideosByIds(ids: string[]): Promise<YtVideo[]> {
 /**
  * 한국 인기 영상 목록 (홈 피드).
  * 할당량: videos.list 1 + channels.list 1
+ *
+ * @throws YouTubeApiError NOT_FOUND: 인기 차트가 없는 카테고리 (예: 19 여행/이벤트, 27 교육)
  */
-export async function getPopularVideos(
-  params: {
-    categoryId?: string;
-    pageToken?: string;
-    maxResults?: number;
-  } = {},
-): Promise<Page<Video>> {
+export async function getPopularVideos(params: PopularVideosParams = {}): Promise<Page<Video>> {
   const res = await ytFetch<YtListResponse<YtVideo>>('videos', {
     part: VIDEO_PARTS,
     chart: 'mostPopular',
     regionCode: REGION_CODE,
     videoCategoryId: params.categoryId,
     pageToken: params.pageToken,
-    maxResults: params.maxResults ?? 24,
+    maxResults: pageSize(params.maxResults, PAGE_SIZE.popular),
   });
   return {
     items: await normalizeVideos(res.items ?? []),
@@ -135,15 +153,9 @@ export async function getVideoCategories(): Promise<VideoCategory[]> {
  * search.list로 id를 찾고, videos.list로 재생시간 · 조회수를 보강한다.
  * 할당량: search.list 1회(하루 100회 한도) + videos.list 1 + channels.list 1
  *
- * @param publishedAfter ISO 8601 (예: 2026-11-03T00:00:00Z)
+ * @throws YouTubeApiError BAD_REQUEST: 검색어가 비어 있음
  */
-export async function searchVideos(params: {
-  q: string;
-  order?: SearchOrder;
-  publishedAfter?: string;
-  pageToken?: string;
-  maxResults?: number;
-}): Promise<Page<Video>> {
+export async function searchVideos(params: SearchVideosParams): Promise<Page<Video>> {
   const q = params.q.trim();
   if (!q) throw new YouTubeApiError('BAD_REQUEST', '검색어를 입력하세요.');
 
@@ -156,12 +168,10 @@ export async function searchVideos(params: {
     pageToken: params.pageToken,
     regionCode: REGION_CODE,
     relevanceLanguage: LANGUAGE,
-    maxResults: params.maxResults ?? 20,
+    maxResults: pageSize(params.maxResults, PAGE_SIZE.search),
   });
 
-  const ids = (res.items ?? [])
-    .map((item) => item.id.videoId)
-    .filter((id): id is string => Boolean(id));
+  const ids = (res.items ?? []).map((item) => item.id.videoId).filter(isDefined);
 
   return {
     items: await normalizeVideos(await fetchVideosByIds(ids)),
@@ -188,15 +198,11 @@ export async function getVideo(id: string): Promise<Video> {
  * 인기 차트를 지원하지 않는 카테고리면 빈 목록을 돌려준다.
  * 할당량: videos.list 1 + channels.list 1
  */
-export async function getRelatedVideos(params: {
-  categoryId: string;
-  excludeId?: string;
-  maxResults?: number;
-}): Promise<Video[]> {
+export async function getRelatedVideos(params: RelatedVideosParams): Promise<Video[]> {
   try {
     const page = await getPopularVideos({
       categoryId: params.categoryId,
-      maxResults: params.maxResults ?? 20,
+      maxResults: params.maxResults ?? PAGE_SIZE.related,
     });
     return page.items.filter((v) => v.id !== params.excludeId);
   } catch (err) {
