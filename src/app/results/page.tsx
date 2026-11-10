@@ -1,7 +1,9 @@
 import { Suspense } from 'react';
 import SearchBar from '@/features/search/components/SearchBar';
+import SearchFilterBar from '@/features/search/components/SearchFilterBar';
 import SearchQueryProvider from '@/features/search/components/SearchQueryProvider';
 import SearchResultList from '@/features/search/components/SearchResultList';
+import { parseFilters } from '@/features/search/lib/filters';
 import { normalizeQuery } from '@/features/search/lib/query';
 
 async function SearchResults({
@@ -9,8 +11,9 @@ async function SearchResults({
 }: {
   searchParams: PageProps<'/results'>['searchParams'];
 }) {
-  const { q } = await searchParams;
+  const { q, order, period } = await searchParams;
   const query = normalizeQuery(Array.isArray(q) ? q[0] : q);
+  const filters = parseFilters({ order, period });
 
   if (!query) {
     return <p className="text-sub">검색어를 입력해 주세요.</p>;
@@ -22,8 +25,15 @@ async function SearchResults({
         &lsquo;{query}&rsquo; 검색 결과
       </h1>
       <div className="mt-4">
-        {/* 검색어가 바뀌면 목록 상태를 새로 시작한다 */}
-        <SearchResultList key={query} query={query} />
+        <SearchFilterBar query={query} filters={filters} />
+      </div>
+      <div className="mt-6">
+        {/* 검색어 · 필터가 바뀌면 목록 상태를 새로 시작한다 */}
+        <SearchResultList
+          key={`${query}|${filters.order}|${filters.period}`}
+          query={query}
+          filters={filters}
+        />
       </div>
     </section>
   );
