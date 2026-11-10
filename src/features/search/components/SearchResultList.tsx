@@ -1,8 +1,10 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { fetchSearchPage } from '../api';
 import { isQuotaError } from '../errors';
+import { toPublishedAfter, type SearchFilters } from '../lib/filters';
 import SearchResultCard, { SearchResultCardSkeleton } from './SearchResultCard';
 
 const SKELETON_COUNT = 4;
@@ -29,7 +31,15 @@ function StateMessage({ title, children }: { title: string; children?: React.Rea
   );
 }
 
-export default function SearchResultList({ query }: { query: string }) {
+export default function SearchResultList({
+  query,
+  filters,
+}: {
+  query: string;
+  filters: SearchFilters;
+}) {
+  // 더 보기로 다음 페이지를 불러올 때도 같은 기준 시각을 쓰도록 처음 한 번만 계산한다
+  const [publishedAfter] = useState(() => toPublishedAfter(filters.period));
   const {
     data,
     error,
@@ -42,8 +52,10 @@ export default function SearchResultList({ query }: { query: string }) {
     isFetchingNextPage,
     isFetchNextPageError,
   } = useInfiniteQuery({
-    queryKey: ['search', query],
-    queryFn: ({ pageParam }) => fetchSearchPage(query, pageParam),
+    // 기간 필터는 시각이 아니라 period 값으로 캐시를 구분한다
+    queryKey: ['search', query, filters.order, filters.period],
+    queryFn: ({ pageParam }) =>
+      fetchSearchPage({ q: query, order: filters.order, publishedAfter, pageToken: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextPageToken ?? undefined,
     // 같은 검색어는 1시간 동안 다시 요청하지 않고 캐시에도 남겨 둔다 (search.list 하루 100회 할당량 보호).
@@ -92,7 +104,11 @@ export default function SearchResultList({ query }: { query: string }) {
   if (videos.length === 0) {
     return (
       <StateMessage title="검색 결과가 없어요">
-        <p className="text-sub text-sm">다른 검색어를 입력하거나 철자를 확인해 주세요.</p>
+        <p className="text-sub text-sm">
+          {filters.period !== 'all'
+            ? '기간을 넓히거나 다른 검색어를 입력해 보세요.'
+            : '다른 검색어를 입력하거나 철자를 확인해 주세요.'}
+        </p>
       </StateMessage>
     );
   }

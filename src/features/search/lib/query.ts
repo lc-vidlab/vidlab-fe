@@ -1,3 +1,5 @@
+import { DEFAULT_FILTERS, type SearchFilters } from './filters';
+
 export const SEARCH_PATH = '/results';
 export const MAX_QUERY_LENGTH = 100;
 
@@ -7,6 +9,12 @@ export function normalizeQuery(raw: string | null | undefined): string {
   return raw.trim().replace(/\s+/g, ' ').slice(0, MAX_QUERY_LENGTH);
 }
 
-export function buildSearchUrl(query: string): string {
-  return `${SEARCH_PATH}?q=${encodeURIComponent(query)}`;
+/** 기본값인 필터는 URL에 넣지 않는다 (/results?q=lofi 와 같은 검색이 같은 URL이 되도록) */
+export function buildSearchUrl(query: string, filters: Partial<SearchFilters> = {}): string {
+  const params = new URLSearchParams({ q: query });
+  if (filters.order && filters.order !== DEFAULT_FILTERS.order) params.set('order', filters.order);
+  if (filters.period && filters.period !== DEFAULT_FILTERS.period) {
+    params.set('period', filters.period);
+  }
+  return `${SEARCH_PATH}?${params.toString()}`;
 }
