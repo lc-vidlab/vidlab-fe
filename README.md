@@ -16,7 +16,7 @@ YouTube Data API v3로 인기 영상 피드, 검색, 영상 상세(재생 · 댓
 
 ## 기술 스택
 
-Next.js (App Router) · React · TypeScript · Tailwind CSS v4 · TanStack Query · next-themes · Supabase(Postgres, 익명 댓글 저장 예정) · Vercel 배포
+Next.js (App Router) · React · TypeScript · Tailwind CSS v4 · TanStack Query · next-themes · Supabase(Postgres, 익명 댓글 저장) · Vercel 배포
 
 ## 실행 방법
 
@@ -35,7 +35,7 @@ npm run dev
 | `YOUTUBE_API_KEY` | YouTube Data API v3 키. 서버에서만 사용하며 `NEXT_PUBLIC_`으로 노출하지 않습니다                   |
 | `USE_MOCK`        | `false`로 적었을 때만 실제 API를 호출합니다. 없거나 다른 값이면 `src/mocks`의 mock 데이터를 씁니다 |
 | `MOCK_DELAY_MS`   | (선택) mock 응답 지연(ms). 기본 300. 스켈레톤을 오래 보고 싶을 때 늘립니다                         |
-| `DATABASE_URL`    | 익명 댓글 DB 연결 주소                                                                             |
+| `DATABASE_URL`    | (댓글 API 담당만) 익명 댓글 DB 연결 주소. 아래 "댓글 DB" 참고                                      |
 | `IP_HASH_SALT`    | 댓글 작성자 IP를 해시할 때 쓰는 솔트                                                               |
 
 실제 API는 개인 GCP 프로젝트 키로만 테스트하고, 팀 키는 배포에만 씁니다. 배포 환경에는 `USE_MOCK=false`를 반드시 설정합니다.
@@ -54,6 +54,17 @@ mock 모드에서 재현할 수 있는 상태(무한 스크롤, 결과 없음, �
 | `npm run test:watch` | 파일을 고칠 때마다 테스트 다시 실행               |
 
 테스트 파일은 대상 파일 옆에 `*.test.ts`로 둡니다. (예: `src/lib/youtube/mock.test.ts`)
+
+### 댓글 DB
+
+익명 댓글은 Supabase(Postgres)에 저장합니다. 결정 근거는 [#15](https://github.com/lc-vidlab/vidlab-fe/issues/15)를 참고하세요.
+
+- 콘솔은 이주혁만 관리합니다. 다른 팀원은 DB 없이 개발할 수 있습니다.
+- 테이블 정의는 `src/lib/db/schema.sql`입니다. 처음 만들 때는 이 파일을 Supabase SQL Editor에서 실행합니다.
+- 이미 있는 테이블은 이 파일을 다시 실행해도 바뀌지 않습니다. 바꿀 때는 `alter table` 문을 따로 실행하고, `schema.sql`도 최종 모습으로 고쳐 둡니다.
+- `DATABASE_URL`은 Supabase 콘솔 **Connect → Direct → Transaction pooler** 주소(포트 6543)를 씁니다. 직접 연결(5432)은 배포 환경에서 연결 수가 바닥납니다. 비밀번호에 `@ # / ? :` 같은 문자가 있으면 퍼센트 인코딩해야 합니다.
+- `npm run db:check`: `.env.local`의 `DATABASE_URL`로 연결 · 테이블 · RLS · 입력 제약을 확인합니다. 데이터는 바꾸지 않습니다.
+- 무료 플랜은 7일 동안 요청이 없으면 일시정지됩니다. 시연 전에 콘솔에서 상태를 확인하세요.
 
 ## 폴더 구조
 
