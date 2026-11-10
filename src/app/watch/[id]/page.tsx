@@ -9,7 +9,9 @@ import {
   PlayerSkeleton,
   RelatedSkeleton,
 } from '@/features/watch/components/WatchSkeletons';
-import { isValidVideoId } from '@/features/watch/lib/video-id';
+import { VideoInfo, VideoInfoError } from '@/features/watch/components/VideoInfo';
+import { loadVideo } from '@/features/watch/server/load-video';
+import { isVideoId } from '@/lib/youtube/video-id';
 
 export default function WatchPage({ params }: PageProps<'/watch/[id]'>) {
   return (
@@ -24,14 +26,21 @@ export default function WatchPage({ params }: PageProps<'/watch/[id]'>) {
   );
 }
 
-function WatchContent({ id }: { id: string }) {
-  if (!isValidVideoId(id)) notFound();
+async function WatchContent({ id }: { id: string }) {
+  if (!isVideoId(id)) notFound();
+
+  const result = await loadVideo(id);
+  if ('error' in result && result.error === 'NOT_FOUND') notFound();
+
+  // 정보를 못 가져와도(할당량 초과 등) 플레이어 · 댓글은 그대로 쓸 수 있게 정보 칸만 에러 표시
+  const info =
+    'video' in result ? <VideoInfo video={result.video} /> : <VideoInfoError code={result.error} />;
+  const title = 'video' in result ? result.video.title : undefined;
 
   return (
     <WatchLayout
-      player={<VideoPlayer key={id} videoId={id} />}
-      // TODO(WATCH-03): 영상 · 채널 정보
-      info={<InfoSkeleton />}
+      player={<VideoPlayer key={id} videoId={id} title={title} />}
+      info={info}
       comments={
         <div className="flex flex-col gap-6">
           {/* 영상이 바뀌면 입력 중이던 내용이 남지 않도록 key로 초기화 */}

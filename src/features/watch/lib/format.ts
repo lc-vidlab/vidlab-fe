@@ -1,0 +1,53 @@
+// 상세 페이지용 숫자 · 날짜 표시.
+// TODO: 이주혁 SET-05 공용 lib/format.ts가 생기면 그쪽 함수로 교체한다.
+
+const TIME_ZONE = 'Asia/Seoul';
+
+/** 1234567 → 조회수 1,234,567회. 0(조회수 숨김)이면 null */
+export function formatViewCountFull(count: number): string | null {
+  if (count <= 0) return null;
+  return `조회수 ${count.toLocaleString('ko-KR')}회`;
+}
+
+/** 1820000 → 구독자 182만명, 98400 → 구독자 9.8만명. 숨긴 채널(undefined)이면 null */
+export function formatSubscriberCount(count: number | undefined): string | null {
+  if (count === undefined) return null;
+  const units: [number, string][] = [
+    [1e8, '억'],
+    [1e4, '만'],
+    [1e3, '천'],
+  ];
+  for (const [size, unit] of units) {
+    if (count >= size) {
+      const value = count / size;
+      const text =
+        value >= 10 ? Math.floor(value).toString() : (Math.floor(value * 10) / 10).toString();
+      return `구독자 ${text}${unit}명`;
+    }
+  }
+  return `구독자 ${count}명`;
+}
+
+/** ISO 날짜 → 3일 전, 2개월 전 */
+export function formatRelativeTime(iso: string, now: number = Date.now()): string {
+  const diffSec = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 1000));
+  const steps: [number, string][] = [
+    [60 * 60 * 24 * 365, '년'],
+    [60 * 60 * 24 * 30, '개월'],
+    [60 * 60 * 24 * 7, '주'],
+    [60 * 60 * 24, '일'],
+    [60 * 60, '시간'],
+    [60, '분'],
+  ];
+  for (const [size, unit] of steps) {
+    if (diffSec >= size) return `${Math.floor(diffSec / size)}${unit} 전`;
+  }
+  return '방금 전';
+}
+
+/** ISO 날짜 → 2026. 11. 7. (서버 시간대와 상관없이 한국 날짜) */
+export function formatFullDate(iso: string): string {
+  return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeZone: TIME_ZONE }).format(
+    new Date(iso),
+  );
+}
