@@ -10,6 +10,7 @@ import {
 import { PAGE_SIZE } from './constants';
 import { YouTubeApiError } from './errors';
 import { mockService as mock } from './mock';
+import { isVideoId } from './validation';
 
 // mock 데이터를 고치다가 팀원이 쓰는 상태(페이지네이션, 에러 재현 등)를 깨뜨리지 않았는지 확인한다.
 // 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/4
@@ -26,6 +27,10 @@ describe('mock 데이터', () => {
   it('영상 id가 겹치지 않는다', () => {
     const ids = MOCK_VIDEOS.map((v) => v.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('영상 id가 YouTube 형식(11자)이다. 상세 페이지 · API의 id 검사를 통과해야 한다', () => {
+    for (const video of MOCK_VIDEOS) expect(isVideoId(video.id), video.id).toBe(true);
   });
 
   it('모든 영상의 카테고리가 카테고리 목록에 있다', () => {
