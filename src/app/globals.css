@@ -8,6 +8,8 @@
   --sub: #606060;
   --border: #e5e5e5;
   --accent: #3ea6ff;
+  --brand-soft: #b5dcf5;
+  --brand-wash: #e1f2ff;
 }
 .dark {
   --bg: #0f0f0f;
@@ -16,6 +18,8 @@
   --sub: #aaaaaa;
   --border: #3f3f3f;
   --accent: #3ea6ff;
+  --brand-soft: #537f9c;
+  --brand-wash: #203749;
 }
 
 @theme inline {
@@ -25,6 +29,8 @@
   --color-sub: var(--sub);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-wash: var(--brand-wash);
 }
 
 body {
