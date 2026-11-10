@@ -1,5 +1,7 @@
 import { Suspense } from 'react';
 import SearchBar from '@/features/search/components/SearchBar';
+import SearchQueryProvider from '@/features/search/components/SearchQueryProvider';
+import SearchResultList from '@/features/search/components/SearchResultList';
 import { normalizeQuery } from '@/features/search/lib/query';
 
 async function SearchResults({
@@ -19,8 +21,10 @@ async function SearchResults({
       <h1 id="results-heading" className="text-text text-lg font-semibold">
         &lsquo;{query}&rsquo; 검색 결과
       </h1>
-      {/* TODO(민진): SRCH-03 결과 리스트 (feature/search-results) */}
-      <p className="text-sub mt-4">결과 리스트는 다음 단계에서 연결합니다.</p>
+      <div className="mt-4">
+        {/* 검색어가 바뀌면 목록 상태를 새로 시작한다 */}
+        <SearchResultList key={query} query={query} />
+      </div>
     </section>
   );
 }
@@ -32,9 +36,11 @@ export default function ResultsPage({ searchParams }: PageProps<'/results'>) {
       <div className="mb-6 flex justify-center">
         <SearchBar />
       </div>
-      <Suspense fallback={<p className="text-sub">불러오는 중…</p>}>
-        <SearchResults searchParams={searchParams} />
-      </Suspense>
+      <SearchQueryProvider>
+        <Suspense fallback={<p className="text-sub">불러오는 중…</p>}>
+          <SearchResults searchParams={searchParams} />
+        </Suspense>
+      </SearchQueryProvider>
     </main>
   );
 }
