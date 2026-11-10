@@ -1,14 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Trash2, X } from 'lucide-react';
 import VideoCard from '@/components/video/VideoCard';
-import ThemeToggle from '@/components/ui/ThemeToggle';
-import SearchBar from '@/features/search/components/SearchBar';
 import { fetchFeedPage } from '../api';
 import { nextFeedPageToken, uniqueFeedVideos } from '../pagination';
 import type { FeedCategory } from '../types';
@@ -120,22 +117,6 @@ export default function FeedPage() {
 
   return (
     <div className="bg-bg min-h-screen">
-      <header className="border-border bg-bg sticky top-0 z-20 border-b">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-end gap-3 px-6 py-5 sm:px-8 lg:px-12">
-          <Link
-            href="/"
-            aria-label="Vidlab 홈"
-            className="text-text hidden text-2xl font-black tracking-tight"
-          >
-            VIDLAB<span className="text-accent">.</span>
-          </Link>
-          <div className="max-w-md min-w-0 flex-1">
-            <SearchBar />
-          </div>
-          <ThemeToggle />
-        </div>
-      </header>
-
       <main className="mx-auto max-w-[1440px] px-6 pt-8 pb-12 sm:px-8 lg:px-12">
         {showHistory ? (
           <section aria-labelledby="watch-history-heading">

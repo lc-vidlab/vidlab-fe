@@ -1,8 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { Clock, House, ListClock, X } from 'lucide-react';
+import { Clock, ListClock, X } from 'lucide-react';
 import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   addSearchHistory,
@@ -184,13 +183,6 @@ function SearchBarInner() {
   // URL의 검색어가 바뀌면(뒤로가기 등) key로 폼을 다시 만들어 입력값을 URL과 맞춘다.
   return (
     <div className={wrapClass}>
-      <Link
-        href="/"
-        aria-label="홈으로 이동"
-        className="text-sub hover:bg-surface hover:text-text focus-visible:outline-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-full focus-visible:outline-2"
-      >
-        <House aria-hidden="true" size={20} />
-      </Link>
       <SearchForm key={query} initialQuery={query} />
     </div>
   );
@@ -199,7 +191,6 @@ function SearchBarInner() {
 function SearchBarFallback() {
   return (
     <div className={wrapClass} aria-hidden="true">
-      <div className="h-10 w-10 shrink-0" />
       <div className={formClass}>
         <div className={inputWrapClass}>
           <span className="text-sub">검색</span>

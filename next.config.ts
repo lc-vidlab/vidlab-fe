@@ -10,7 +10,11 @@ const nextConfig: NextConfig = {
       new URL('https://i.ytimg.com/**'),
       new URL('https://yt3.ggpht.com/**'),
       new URL('https://yt3.googleusercontent.com/**'),
-      new URL('https://flagcdn.com/w40/**'),
+      {
+        protocol: 'https',
+        hostname: 'flagcdn.com',
+        pathname: '/w40/**',
+      },
     ],
   },
   partialPrefetching: true,
