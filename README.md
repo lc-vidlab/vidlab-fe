@@ -30,15 +30,16 @@ npm run dev
 
 ### 환경변수
 
-| 이름              | 설명                                                                                               |
-| ----------------- | -------------------------------------------------------------------------------------------------- |
-| `YOUTUBE_API_KEY` | YouTube Data API v3 키. 서버에서만 사용하며 `NEXT_PUBLIC_`으로 노출하지 않습니다                   |
-| `USE_MOCK`        | `false`로 적었을 때만 실제 API를 호출합니다. 없거나 다른 값이면 `src/mocks`의 mock 데이터를 씁니다 |
-| `MOCK_DELAY_MS`   | (선택) mock 응답 지연(ms). 기본 300. 스켈레톤을 오래 보고 싶을 때 늘립니다                         |
-| `DATABASE_URL`    | (댓글 API 담당만) 익명 댓글 DB 연결 주소. 아래 "댓글 DB" 참고                                      |
-| `IP_HASH_SALT`    | 댓글 작성자 IP를 해시할 때 쓰는 솔트                                                               |
+| 이름                | 설명                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `YOUTUBE_API_KEY`   | YouTube Data API v3 키. 서버에서만 사용하며 `NEXT_PUBLIC_`으로 노출하지 않습니다                   |
+| `USE_MOCK`          | `false`로 적었을 때만 실제 API를 호출합니다. 없거나 다른 값이면 `src/mocks`의 mock 데이터를 씁니다 |
+| `MOCK_DELAY_MS`     | (선택) mock 응답 지연(ms). 기본 300. 스켈레톤을 오래 보고 싶을 때 늘립니다                         |
+| `DATABASE_URL`      | (댓글 API 담당만) 익명 댓글 DB 연결 주소. 아래 "댓글 DB" 참고                                      |
+| `COMMENTS_USE_MOCK` | `false`로 적었을 때만 댓글을 실제 DB에 저장합니다. 없거나 다른 값이면 메모리 mock 저장소를 씁니다  |
+| `IP_HASH_SALT`      | (댓글 API 담당만) 댓글 작성자 IP 해시 키. `openssl rand -hex 32`로 만듭니다 (32자 이상)            |
 
-실제 API는 개인 GCP 프로젝트 키로만 테스트하고, 팀 키는 배포에만 씁니다. 배포 환경에는 `USE_MOCK=false`를 반드시 설정합니다.
+실제 API는 개인 GCP 프로젝트 키로만 테스트하고, 팀 키는 배포에만 씁니다. 배포 환경에는 `USE_MOCK=false`, `COMMENTS_USE_MOCK=false`를 반드시 설정합니다.
 
 mock 모드에서 재현할 수 있는 상태(무한 스크롤, 결과 없음, 할당량 초과 등)는 [#4](https://github.com/lc-vidlab/vidlab-fe/issues/4)를 참고하세요. 예: 검색어 `__quota__`로 검색하면 할당량 초과 에러가 납니다.
 
@@ -66,6 +67,34 @@ mock 모드에서 재현할 수 있는 상태(무한 스크롤, 결과 없음, �
 - `npm run db:check`: `.env.local`의 `DATABASE_URL`로 연결 · 테이블 · RLS · 입력 제약을 확인합니다. 데이터는 바꾸지 않습니다.
 - 무료 플랜은 7일 동안 요청이 없으면 일시정지됩니다. 시연 전에 콘솔에서 상태를 확인하세요.
 
+### 댓글 API
+
+결정 근거는 [#19](https://github.com/lc-vidlab/vidlab-fe/issues/19)를 참고하세요. 타입은 `@/lib/comments/types`, 입력 규칙 · 검사는 `@/lib/comments/rules`에서 가져옵니다 (화면에서도 import 가능).
+
+| 요청                                                                   | 응답                                                                                                             |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `GET /api/comments?videoId=…&cursor=…`                                 | 200 `CommentPage` `{ items, nextCursor?, total }`. 최신순 20개. 다음 페이지는 `nextCursor`를 `cursor`로 넘깁니다 |
+| `POST /api/comments` (JSON `{ videoId, nickname, password, content }`) | 201 `CommentItem` `{ id, nickname, content, createdAt }`                                                         |
+
+- 실패하면 `{ error: { code, message, fields? } }`. `VALIDATION_ERROR`(400)는 `fields`에 닉네임 · 비밀번호 · 내용별 메시지가 있습니다. 그 밖에 `BAD_REQUEST`(400), `SERVER_ERROR`(500).
+- `POST`는 `Content-Type: application/json`만 받습니다.
+- mock 모드: `mock-vid-01`에 댓글 25개(2페이지)가 있고 다른 영상은 0개입니다. 내용을 `__error__`로 작성하면 500을 재현합니다. 작성한 댓글은 서버를 다시 켜면 사라집니다.
+- 서버 코드는 `@/lib/comments/service`만 import합니다. (`postgres.ts` · `mock.ts` 직접 import는 ESLint가 막습니다)
+- SQL 테스트: `src/lib/comments/postgres.test.ts` 맨 위 안내대로 로컬 Postgres를 띄우고 `TEST_DATABASE_URL`을 넣으면 실행됩니다. 평소 `npm test`에서는 건너뜁니다.
+
+```ts
+// 작성 예 (클라이언트)
+const response = await fetch('/api/comments', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ videoId, nickname, password, content }),
+});
+if (!response.ok) {
+  const { error } = (await response.json()) as CommentApiErrorBody;
+  // error.fields?.nickname 등을 칸 아래에 표시
+}
+```
+
 ## 폴더 구조
 
 ```
@@ -83,6 +112,7 @@ src/
     feed/ search/ watch/  영역별 훅 · 컴포넌트
   lib/
     youtube/              API 클라이언트 · 타입
+    comments/             댓글 서비스 · 입력 규칙 · 타입
     db/                   DB 클라이언트 · 댓글 스키마
   mocks/                  API 응답 fixture
 docs/

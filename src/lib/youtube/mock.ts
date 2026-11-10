@@ -5,6 +5,7 @@ import 'server-only';
 //
 // 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/4
 
+import { mockDelay } from '@/lib/mock-delay';
 import { MOCK_CATEGORIES, MOCK_CATEGORIES_WITHOUT_CHART, MOCK_VIDEOS } from '@/mocks/youtube';
 
 import { PAGE_SIZE, pageSize } from './constants';
@@ -21,9 +22,6 @@ import type {
 } from './types';
 import { requireQuery } from './validation';
 
-/** 기본 응답 지연(ms). 로딩 스켈레톤을 확인할 수 있게 한다 */
-const DEFAULT_DELAY_MS = 300;
-
 /**
  * 이 검색어로 검색하면 해당 에러를 재현한다.
  * 일반 객체로 만들면 'constructor' 같은 기본 속성 이름에도 반응하므로 Map을 쓴다.
@@ -35,20 +33,6 @@ const ERROR_QUERIES = new Map<string, ApiErrorCode>([
 
 const PAGE_TOKEN_PREFIX = 'mock:';
 const PAGE_TOKEN_PATTERN = /^mock:(\d+)$/;
-
-/**
- * 응답 지연(ms). MOCK_DELAY_MS 환경변수로 바꿀 수 있다.
- * 예: 스켈레톤을 오래 보고 싶으면 2000, 테스트에서는 0
- */
-function delayMs(): number {
-  const raw = process.env.MOCK_DELAY_MS;
-  const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_DELAY_MS;
-}
-
-function wait(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, delayMs()));
-}
 
 /** pageToken을 목록의 시작 위치로 바꾼다. 형식이 틀리면 실제 API처럼 BAD_REQUEST */
 function parsePageToken(pageToken: string | undefined): number {
@@ -85,18 +69,18 @@ function popularList(categoryId: string | undefined): Video[] {
 }
 
 async function getPopularVideos(params: PopularVideosParams = {}): Promise<Page<Video>> {
-  await wait();
+  await mockDelay();
   const size = pageSize(params.maxResults, PAGE_SIZE.popular);
   return paginate(popularList(params.categoryId), params.pageToken, size);
 }
 
 async function getVideoCategories(): Promise<VideoCategory[]> {
-  await wait();
+  await mockDelay();
   return MOCK_CATEGORIES;
 }
 
 async function searchVideos(params: SearchVideosParams): Promise<Page<Video>> {
-  await wait();
+  await mockDelay();
   const q = requireQuery(params.q);
 
   const errorCode = ERROR_QUERIES.get(q);
@@ -120,14 +104,14 @@ async function searchVideos(params: SearchVideosParams): Promise<Page<Video>> {
 }
 
 async function getVideo(id: string): Promise<Video> {
-  await wait();
+  await mockDelay();
   const video = MOCK_VIDEOS.find((v) => v.id === id);
   if (!video) throw videoNotFoundError();
   return video;
 }
 
 async function getRelatedVideos(params: RelatedVideosParams): Promise<Video[]> {
-  await wait();
+  await mockDelay();
   // live.ts와 같은 모양: 같은 카테고리 인기 영상에서 현재 영상을 빼고,
   // 인기 차트가 없는 카테고리(NOT_FOUND)면 빈 목록
   try {
