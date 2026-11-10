@@ -19,7 +19,7 @@ import {
 
 const formClass = 'flex w-full max-w-xl items-center';
 const inputWrapClass =
-  'flex h-10 min-w-0 flex-1 items-center rounded-l-full border border-border bg-bg pr-1 pl-4 focus-within:border-accent';
+  'flex h-10 min-w-0 flex-1 items-center rounded-l-full border border-border bg-bg pr-1 pl-4 focus-within:border-text';
 const submitClass =
   'flex h-10 w-16 shrink-0 items-center justify-center rounded-r-full border border-l-0 border-border bg-surface text-text';
 
@@ -119,6 +119,7 @@ function SearchForm({ initialQuery }: { initialQuery: string }) {
   const [value, setValue] = useState(initialQuery);
   const [isPanelOpen, setPanelOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const keepClosedOnFocusRef = useRef(false);
   const recent = useRecentSearches();
 
   // 입력값이 있으면 그 글자가 들어간 최근 검색어만 보여준다 (로컬 필터라 API 호출 없음)
@@ -161,14 +162,27 @@ function SearchForm({ initialQuery }: { initialQuery: string }) {
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
-    if (e.key === 'Escape') setPanelOpen(false);
+    if (e.key !== 'Escape') return;
+    setPanelOpen(false);
+    // 최근 검색어 항목에서 Esc를 누르면 그 버튼이 사라져 포커스를 잃으므로 입력창으로 돌려준다.
+    // 이때 폼의 onFocus가 목록을 다시 열지 않도록 한 번 막는다
+    if (document.activeElement !== inputRef.current) {
+      keepClosedOnFocusRef.current = true;
+      inputRef.current?.focus();
+    }
   }
 
   return (
     <form
       role="search"
       onSubmit={handleSubmit}
-      onFocus={() => setPanelOpen(true)}
+      onFocus={() => {
+        if (keepClosedOnFocusRef.current) {
+          keepClosedOnFocusRef.current = false;
+          return;
+        }
+        setPanelOpen(true);
+      }}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
       className={`relative ${formClass}`}
