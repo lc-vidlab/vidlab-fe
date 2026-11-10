@@ -58,6 +58,10 @@ export default function SearchResultList({
       fetchSearchPage({ q: query, order: filters.order, publishedAfter, pageToken: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextPageToken ?? undefined,
+    // 같은 검색어는 1시간 동안 다시 요청하지 않고 캐시에도 남겨 둔다 (search.list 하루 100회 할당량 보호).
+    // 전역 기본값(1분 · 5분)보다 길게 둔다. 전역 설정은 src/app/providers.tsx
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     // 할당량 초과는 재시도해도 실패하므로 바로 안내한다. 그 외 오류는 1회만 재시도.
     retry: (failureCount, err) => !isQuotaError(err) && failureCount < 1,
   });

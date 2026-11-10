@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import SearchBar from '@/features/search/components/SearchBar';
 import SearchFilterBar from '@/features/search/components/SearchFilterBar';
-import SearchQueryProvider from '@/features/search/components/SearchQueryProvider';
 import SearchResultList from '@/features/search/components/SearchResultList';
 import { parseFilters } from '@/features/search/lib/filters';
 import { normalizeQuery } from '@/features/search/lib/query';
@@ -46,11 +45,9 @@ export default function ResultsPage({ searchParams }: PageProps<'/results'>) {
       <div className="mb-6 flex justify-center">
         <SearchBar />
       </div>
-      <SearchQueryProvider>
-        <Suspense fallback={<p className="text-sub">불러오는 중…</p>}>
-          <SearchResults searchParams={searchParams} />
-        </Suspense>
-      </SearchQueryProvider>
+      <Suspense fallback={<p className="text-sub">불러오는 중…</p>}>
+        <SearchResults searchParams={searchParams} />
+      </Suspense>
     </main>
   );
 }
