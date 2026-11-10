@@ -2,14 +2,10 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { fetchSearchPage } from '../api';
-import { SearchError } from '../types';
+import { isQuotaError } from '../errors';
 import SearchResultCard, { SearchResultCardSkeleton } from './SearchResultCard';
 
 const SKELETON_COUNT = 4;
-
-function isQuotaError(error: unknown) {
-  return error instanceof SearchError && error.code === 'quotaExceeded';
-}
 
 function SkeletonList() {
   return (

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { formatDuration, formatRelativeTime, formatViewCount } from '../lib/format';
-import type { SearchVideo } from '../types';
+import type { Video } from '@/lib/youtube/types';
 
 function PlayIcon() {
   return (
@@ -14,8 +14,8 @@ function PlayIcon() {
  * 검색 결과용 가로형 카드. 모바일에서는 세로로 쌓인다.
  * TODO(민진): 주훈 FEED-01 VideoCard가 나오면 썸네일·배지 부분을 공용 컴포넌트와 맞춘다.
  */
-export default function SearchResultCard({ video }: { video: SearchVideo }) {
-  const duration = formatDuration(video.duration);
+export default function SearchResultCard({ video }: { video: Video }) {
+  const duration = formatDuration(video.durationSec);
   const meta = [formatViewCount(video.viewCount), formatRelativeTime(video.publishedAt)]
     .filter(Boolean)
     .join(' · ');
@@ -52,7 +52,7 @@ export default function SearchResultCard({ video }: { video: SearchVideo }) {
             {video.title}
           </h2>
           {meta && <p className="text-sub mt-1 text-xs">{meta}</p>}
-          <p className="text-sub mt-2 text-sm">{video.channelTitle}</p>
+          <p className="text-sub mt-2 text-sm">{video.channel.title}</p>
           <p className="text-sub mt-2 line-clamp-2 hidden text-xs sm:block">{video.description}</p>
         </div>
       </Link>
