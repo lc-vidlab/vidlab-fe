@@ -1,4 +1,40 @@
-// TODO(민진): 검색 결과 구현
-export default function ResultsPage() {
-  return <main>검색 결과 (민진)</main>;
+import { Suspense } from 'react';
+import SearchBar from '@/features/search/components/SearchBar';
+import { normalizeQuery } from '@/features/search/lib/query';
+
+async function SearchResults({
+  searchParams,
+}: {
+  searchParams: PageProps<'/results'>['searchParams'];
+}) {
+  const { q } = await searchParams;
+  const query = normalizeQuery(Array.isArray(q) ? q[0] : q);
+
+  if (!query) {
+    return <p className="text-sub">검색어를 입력해 주세요.</p>;
+  }
+
+  return (
+    <section aria-labelledby="results-heading">
+      <h1 id="results-heading" className="text-text text-lg font-semibold">
+        &lsquo;{query}&rsquo; 검색 결과
+      </h1>
+      {/* TODO(민진): SRCH-03 결과 리스트 (feature/search-results) */}
+      <p className="text-sub mt-4">결과 리스트는 다음 단계에서 연결합니다.</p>
+    </section>
+  );
+}
+
+export default function ResultsPage({ searchParams }: PageProps<'/results'>) {
+  return (
+    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+      {/* TODO(민진): SET-03 공통 헤더의 검색창 슬롯이 생기면 그쪽으로 옮기고 여기서는 제거 */}
+      <div className="mb-6 flex justify-center">
+        <SearchBar />
+      </div>
+      <Suspense fallback={<p className="text-sub">불러오는 중…</p>}>
+        <SearchResults searchParams={searchParams} />
+      </Suspense>
+    </main>
+  );
 }
