@@ -30,23 +30,30 @@ npm run dev
 
 ### 환경변수
 
-| 이름              | 설명                                                                             |
-| ----------------- | -------------------------------------------------------------------------------- |
-| `YOUTUBE_API_KEY` | YouTube Data API v3 키. 서버에서만 사용하며 `NEXT_PUBLIC_`으로 노출하지 않습니다 |
-| `USE_MOCK`        | `true`면 실제 API 대신 `src/mocks`의 fixture를 씁니다. 개발 기본값은 `true`      |
-| `DATABASE_URL`    | 익명 댓글 DB 연결 주소                                                           |
-| `IP_HASH_SALT`    | 댓글 작성자 IP를 해시할 때 쓰는 솔트                                             |
+| 이름              | 설명                                                                                               |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 키. 서버에서만 사용하며 `NEXT_PUBLIC_`으로 노출하지 않습니다                   |
+| `USE_MOCK`        | `false`로 적었을 때만 실제 API를 호출합니다. 없거나 다른 값이면 `src/mocks`의 mock 데이터를 씁니다 |
+| `MOCK_DELAY_MS`   | (선택) mock 응답 지연(ms). 기본 300. 스켈레톤을 오래 보고 싶을 때 늘립니다                         |
+| `DATABASE_URL`    | 익명 댓글 DB 연결 주소                                                                             |
+| `IP_HASH_SALT`    | 댓글 작성자 IP를 해시할 때 쓰는 솔트                                                               |
 
-실제 API는 개인 GCP 프로젝트 키로만 테스트하고, 팀 키는 배포에만 씁니다.
+실제 API는 개인 GCP 프로젝트 키로만 테스트하고, 팀 키는 배포에만 씁니다. 배포 환경에는 `USE_MOCK=false`를 반드시 설정합니다.
+
+mock 모드에서 재현할 수 있는 상태(무한 스크롤, 결과 없음, 할당량 초과 등)는 [#4](https://github.com/lc-vidlab/vidlab-fe/issues/4)를 참고하세요. 예: 검색어 `__quota__`로 검색하면 할당량 초과 에러가 납니다.
 
 ### 스크립트
 
-| 명령             | 설명          |
-| ---------------- | ------------- |
-| `npm run dev`    | 개발 서버     |
-| `npm run build`  | 프로덕션 빌드 |
-| `npm run lint`   | ESLint 검사   |
-| `npm run format` | Prettier 포맷 |
+| 명령                 | 설명                                              |
+| -------------------- | ------------------------------------------------- |
+| `npm run dev`        | 개발 서버                                         |
+| `npm run build`      | 프로덕션 빌드                                     |
+| `npm run lint`       | ESLint 검사                                       |
+| `npm run format`     | Prettier 포맷                                     |
+| `npm test`           | 단위 테스트 (Vitest). 네트워크 · API 키 없이 실행 |
+| `npm run test:watch` | 파일을 고칠 때마다 테스트 다시 실행               |
+
+테스트 파일은 대상 파일 옆에 `*.test.ts`로 둡니다. (예: `src/lib/youtube/mock.test.ts`)
 
 ## 폴더 구조
 

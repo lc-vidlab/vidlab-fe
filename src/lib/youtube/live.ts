@@ -1,12 +1,13 @@
 import 'server-only';
 
-// YouTube 조회 서비스 함수.
-// Route Handler와 Server Component가 공통으로 호출한다. 클라이언트에서는 import할 수 없다.
+// 실제 YouTube Data API를 호출하는 서비스 함수 구현.
+// 직접 import하지 말고 service.ts를 쓴다. (USE_MOCK에 따라 이 파일 또는 mock.ts를 고른다)
 //
-// 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/1
+// 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/1, #4
 
 import { ytFetch } from './client';
-import { YouTubeApiError } from './errors';
+import { MAX_PER_REQUEST, PAGE_SIZE, pageSize } from './constants';
+import { YouTubeApiError, videoNotFoundError } from './errors';
 import { toChannel, toVideo, toVideoCategory } from './normalize';
 import type {
   Channel,
@@ -22,19 +23,10 @@ import type {
   YtVideo,
   YtVideoCategory,
 } from './types';
+import { requireQuery } from './validation';
 
 const REGION_CODE = 'KR';
 const LANGUAGE = 'ko';
-
-/** 한 번에 요청할 수 있는 최대 개수 (maxResults, id 목록 모두) */
-const MAX_PER_REQUEST = 50;
-
-/** 함수별 기본 페이지 크기 */
-const PAGE_SIZE = {
-  popular: 24,
-  search: 20,
-  related: 20,
-} as const;
 
 const VIDEO_PARTS = 'snippet,contentDetails,statistics,status';
 const CHANNEL_PARTS = 'snippet,statistics';
@@ -51,10 +43,6 @@ function chunk<T>(list: T[], size: number): T[][] {
   const result: T[][] = [];
   for (let i = 0; i < list.length; i += size) result.push(list.slice(i, i + size));
   return result;
-}
-
-function pageSize(requested: number | undefined, fallback: number): number {
-  return Math.min(requested ?? fallback, MAX_PER_REQUEST);
 }
 
 /**
@@ -156,8 +144,7 @@ export async function getVideoCategories(): Promise<VideoCategory[]> {
  * @throws YouTubeApiError BAD_REQUEST: 검색어가 비어 있음
  */
 export async function searchVideos(params: SearchVideosParams): Promise<Page<Video>> {
-  const q = params.q.trim();
-  if (!q) throw new YouTubeApiError('BAD_REQUEST', '검색어를 입력하세요.');
+  const q = requireQuery(params.q);
 
   const res = await ytFetch<YtListResponse<YtSearchResult>>('search', {
     part: 'snippet',
@@ -187,7 +174,7 @@ export async function searchVideos(params: SearchVideosParams): Promise<Page<Vid
  */
 export async function getVideo(id: string): Promise<Video> {
   const [raw] = await fetchVideosByIds([id]);
-  if (!raw) throw new YouTubeApiError('NOT_FOUND', '영상을 찾을 수 없습니다.');
+  if (!raw) throw videoNotFoundError();
   const [video] = await normalizeVideos([raw]);
   return video;
 }
