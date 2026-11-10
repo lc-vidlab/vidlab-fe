@@ -14,3 +14,11 @@ export class SearchError extends Error {
 export function isQuotaError(error: unknown): boolean {
   return error instanceof SearchError && error.code === 'QUOTA_EXCEEDED';
 }
+
+/** 할당량 초과 · 잘못된 요청은 다시 시도해도 같은 결과라 재시도하지 않는다 */
+export function isRetryableError(error: unknown): boolean {
+  return !(
+    error instanceof SearchError &&
+    (error.code === 'QUOTA_EXCEEDED' || error.code === 'BAD_REQUEST')
+  );
+}

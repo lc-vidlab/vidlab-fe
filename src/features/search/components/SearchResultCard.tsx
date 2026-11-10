@@ -15,7 +15,8 @@ function PlayIcon() {
  * TODO(민진): 주훈 FEED-01 VideoCard가 나오면 썸네일·배지 부분을 공용 컴포넌트와 맞춘다.
  */
 export default function SearchResultCard({ video }: { video: Video }) {
-  const duration = formatDuration(video.durationSec);
+  // 재생시간이 0이면 라이브 방송(진행 중 · 예정)이다. lib/youtube 타입이 라이브를 따로 구분하지 않아서 0으로 판단한다
+  const duration = formatDuration(video.durationSec) ?? 'LIVE';
   const meta = [formatViewCount(video.viewCount), formatRelativeTime(video.publishedAt)]
     .filter(Boolean)
     .join(' · ');
@@ -41,11 +42,9 @@ export default function SearchResultCard({ video }: { video: Video }) {
               <PlayIcon />
             </div>
           )}
-          {duration && (
-            <span className="bg-bg text-text absolute right-2 bottom-2 rounded px-1.5 py-0.5 text-xs font-medium">
-              {duration}
-            </span>
-          )}
+          <span className="bg-bg text-text absolute right-2 bottom-2 rounded px-1.5 py-0.5 text-xs font-medium">
+            {duration}
+          </span>
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-text line-clamp-2 text-base font-medium group-hover:underline sm:text-lg">
@@ -53,7 +52,8 @@ export default function SearchResultCard({ video }: { video: Video }) {
           </h2>
           {meta && <p className="text-sub mt-1 text-xs">{meta}</p>}
           <p className="text-sub mt-2 text-sm">{video.channel.title}</p>
-          <p className="text-sub mt-2 line-clamp-2 hidden text-xs sm:block">{video.description}</p>
+          {/* sm:block을 쓰면 line-clamp의 display를 덮어써 말줄임이 풀리므로 sm:line-clamp-2로 보이게 한다 */}
+          <p className="text-sub mt-2 hidden text-xs sm:line-clamp-2">{video.description}</p>
         </div>
       </Link>
     </li>

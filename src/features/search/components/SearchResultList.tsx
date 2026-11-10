@@ -3,11 +3,13 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { fetchSearchPage } from '../api';
-import { isQuotaError } from '../errors';
+import { isQuotaError, isRetryableError } from '../errors';
 import { toPublishedAfter, type SearchFilters } from '../lib/filters';
 import SearchResultCard, { SearchResultCardSkeleton } from './SearchResultCard';
 
 const SKELETON_COUNT = 4;
+/** 한 번에 불러올 검색 결과 수. 더 보기를 누르면 다음 10개를 불러온다 */
+const PAGE_SIZE = 10;
 
 function SkeletonList() {
   return (
@@ -54,16 +56,25 @@ export default function SearchResultList({
   } = useInfiniteQuery({
     // 기간 필터는 시각이 아니라 period 값으로 캐시를 구분한다
     queryKey: ['search', query, filters.order, filters.period],
-    queryFn: ({ pageParam }) =>
-      fetchSearchPage({ q: query, order: filters.order, publishedAfter, pageToken: pageParam }),
+    queryFn: ({ pageParam, signal }) =>
+      fetchSearchPage(
+        {
+          q: query,
+          order: filters.order,
+          publishedAfter,
+          pageToken: pageParam,
+          maxResults: PAGE_SIZE,
+        },
+        signal,
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextPageToken ?? undefined,
     // 같은 검색어는 1시간 동안 다시 요청하지 않고 캐시에도 남겨 둔다 (search.list 하루 100회 할당량 보호).
     // 전역 기본값(1분 · 5분)보다 길게 둔다. 전역 설정은 src/app/providers.tsx
     staleTime: 60 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
-    // 할당량 초과는 재시도해도 실패하므로 바로 안내한다. 그 외 오류는 1회만 재시도.
-    retry: (failureCount, err) => !isQuotaError(err) && failureCount < 1,
+    // 할당량 초과 · 잘못된 요청은 재시도해도 실패하므로 바로 안내한다. 그 외 오류는 1회만 재시도.
+    retry: (failureCount, err) => isRetryableError(err) && failureCount < 1,
   });
 
   if (isPending) {
@@ -99,7 +110,11 @@ export default function SearchResultList({
     );
   }
 
-  const videos = data.pages.flatMap((page) => page.items);
+  // YouTube 검색은 다음 페이지에 이전 페이지와 같은 영상을 다시 줄 때가 있어서 id 기준으로 한 번만 보여준다
+  const seen = new Set<string>();
+  const videos = data.pages
+    .flatMap((page) => page.items)
+    .filter((video) => !seen.has(video.id) && seen.add(video.id));
 
   if (videos.length === 0) {
     return (
