@@ -1,8 +1,8 @@
 // TODO(민진): 이주혁 SET-05 lib/format.ts가 생기면 그쪽 함수로 교체하고 이 파일은 삭제한다.
 
-/** 1234 → 1.2천회, 12345 → 1.2만회, 123456789 → 1.2억회 */
-export function formatViewCount(count: number | null): string | null {
-  if (count === null) return null;
+/** 1234 → 1.2천회, 12345 → 1.2만회, 123456789 → 1.2억회. 0(조회수 숨김)이면 null */
+export function formatViewCount(count: number): string | null {
+  if (count <= 0) return null;
   const units: [number, string][] = [
     [1e8, '억'],
     [1e4, '만'],
@@ -36,15 +36,11 @@ export function formatRelativeTime(iso: string, now: number = Date.now()): strin
   return '방금 전';
 }
 
-/** PT1H2M5S → 1:02:05, PT18M42S → 18:42, PT45S → 0:45 */
-export function formatDuration(iso: string | null): string | null {
-  if (!iso) return null;
-  const match = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso);
-  if (!match) return null;
-  const [, d = '0', h = '0', m = '0', s = '0'] = match;
-  const hours = Number(d) * 24 + Number(h);
-  const mm = hours > 0 ? m.padStart(2, '0') : m;
-  const ss = s.padStart(2, '0');
-  if (hours === 0 && Number(m) === 0 && Number(s) === 0) return null;
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+/** 초 → 3725 = 1:02:05, 1122 = 18:42, 45 = 0:45. 0(라이브 등)이면 null */
+export function formatDuration(totalSec: number): string | null {
+  if (totalSec <= 0) return null;
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const ss = String(totalSec % 60).padStart(2, '0');
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${ss}` : `${minutes}:${ss}`;
 }
