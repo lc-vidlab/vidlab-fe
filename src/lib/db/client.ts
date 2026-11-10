@@ -2,6 +2,11 @@ import 'server-only';
 
 // 익명 댓글 DB(Supabase Postgres) 연결. 서버 코드에서만 쓴다.
 // 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/15
+//
+// 쿼리를 쓸 때 지킬 것
+// - `select *` 금지. password_hash · ip_hash가 응답에 실리지 않도록 공개할 컬럼만 고른다
+// - 값은 sql`... ${value}` 템플릿으로만 넘긴다. sql.unsafe()에 문자열을 이어 붙이면 SQL 인젝션이 된다
+// - 연결 설정을 바꾸면 scripts/db-check.mjs도 같이 고친다 (server-only 때문에 그 스크립트가 이 파일을 import할 수 없다)
 
 import postgres from 'postgres';
 
@@ -53,7 +58,9 @@ export function getDb(): Db {
     // 쓰지 않는 연결은 20초 뒤 닫는다
     idle_timeout: 20,
     connect_timeout: 10,
-    // Supabase는 SSL로 접속한다. 로컬 Docker Postgres 등은 SSL 없이
+    // 'require'는 통신을 암호화하지만 서버 인증서는 검증하지 않는다 (postgres 드라이버 동작).
+    // 이 옵션이 DATABASE_URL의 ?sslmode=보다 우선한다.
+    // 로컬(localhost · 127.0.0.1 · [::1])은 SSL 없이. docker compose 서비스 이름 등으로 붙으려면 LOCAL_HOSTS에 추가한다
     ssl: isLocal ? false : 'require',
   });
   return globalForDb.vidlabDb;

@@ -7,14 +7,21 @@
 -- 이 파일의 컬럼 · 제약을 고친 뒤 다시 실행해도 기존 테이블은 바뀌지 않는다.
 -- 기존 테이블을 바꿀 때는 alter table 문을 따로 실행하고, 이 파일은 최종 모습으로 맞춰 둔다.
 --
+-- CHECK 제약은 API 검사를 빠뜨렸을 때를 대비한 최소 안전망이다. 입력 검사의 책임은 API(CMT-03)에 있다.
+-- 예: 한글 채움 문자(U+3164) · 제로폭 공백(U+200B) · NBSP · 방향 바꾸기 문자(U+202E)는 여기서 막지 못한다.
+-- API에서는 normalize('NFC') → trim() → 서식 · 제어 문자(\p{Cc} \p{Cf})와 한글 채움 문자 거부 → 글자 수 검사 순서로 한다.
+--
 -- 글자 수는 char_length(유니코드 문자 단위)로 센다.
--- JS에서 같은 기준으로 검사하려면 str.length 대신 [...str].length를 쓴다 (이모지 등).
+-- JS에서 같은 기준으로 검사하려면 먼저 normalize('NFC')를 하고, str.length 대신 [...str].length를 쓴다.
+-- (맥에서 입력한 한글은 자모가 분리된 NFD로 올 수 있어 글자 수가 2~3배로 세어진다. 이모지도 str.length는 2로 센다)
 
 create table if not exists public.comments (
   -- 자동 증가라 큰 id가 더 최근 댓글이다. 최신순 정렬 · 커서 페이지네이션에 id만 쓴다.
   -- (created_at은 마이크로초까지 저장되는데 JS Date는 밀리초까지라, 커서로 쓰면 댓글이 빠질 수 있다)
-  -- postgres 드라이버는 bigint를 문자열로 돌려준다
-  id            bigint generated always as identity primary key,
+  -- postgres 드라이버는 bigint를 문자열로 돌려준다.
+  -- 커서 등 밖에서 받은 id는 /^\d{1,19}$/로 먼저 검사한다. 숫자가 아니면 CHECK 위반(23514)이 아닌 22P02 에러가 난다.
+  -- (내용에 NUL 문자(\u0000)가 있어도 22021 에러가 나므로 API에서 먼저 거부한다)
+  id           bigint generated always as identity primary key,
   -- YouTube 영상 id (src/lib/youtube/video-id.ts와 같은 규칙)
   video_id      text        not null,
   nickname      text        not null,

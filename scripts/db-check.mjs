@@ -23,6 +23,8 @@ try {
   );
   process.exit(1);
 }
+// 연결 설정은 src/lib/db/client.ts와 같아야 한다. 바꾸면 둘 다 고친다.
+// (client.ts는 server-only를 import해서 node 스크립트에서 가져올 수 없다)
 const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
 const sql = postgres(url, {
   prepare: false,
@@ -98,6 +100,25 @@ try {
   } else {
     check(true, 'comments 테이블');
     check(table.rls, 'RLS 켜짐');
+
+    // Supabase 공개 Data API가 쓰는 역할에 테이블 · 시퀀스 권한이 없는지 (schema.sql 마지막 두 줄).
+    // 일반 Postgres처럼 이 역할이 없으면 건너뛴다
+    const PUBLIC_ROLES = ['anon', 'authenticated'];
+    const roles = await sql`select rolname from pg_roles where rolname in ${sql(PUBLIC_ROLES)}`;
+    for (const { rolname } of roles) {
+      const [{ table: tablePriv, seq }] = await sql`
+        select
+          has_table_privilege(${rolname}, 'public.comments',
+            'select, insert, update, delete, truncate, references, trigger') as table,
+          has_sequence_privilege(${rolname}, 'public.comments_id_seq', 'usage, select, update') as seq
+      `;
+      check(
+        !tablePriv && !seq,
+        `외부 권한 없음: ${rolname}`,
+        tablePriv || seq ? 'revoke 줄을 실행하세요' : '',
+      );
+    }
+    if (roles.length === 0) console.log('- 외부 권한 점검 건너뜀 (anon · authenticated 역할 없음)');
 
     const [index] = await sql`
       select 1 from pg_indexes
