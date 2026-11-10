@@ -4,7 +4,7 @@ YouTube Data API v3 기반 영상 탐색 웹 (토이 프로젝트, 4인 팀)
 
 ## 스택
 
-Next.js App Router · React · TypeScript · Tailwind CSS v4 · TanStack Query · next-themes · 댓글 DB는 Supabase(Postgres) 예정
+Next.js App Router · React · TypeScript · Tailwind CSS v4 · TanStack Query · next-themes · 댓글 DB는 Supabase(Postgres), `src/lib/db`
 
 ## 구조
 
