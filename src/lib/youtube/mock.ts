@@ -19,8 +19,8 @@ import type {
   VideoCategory,
 } from './types';
 
-/** 응답 지연. 로딩 스켈레톤을 확인할 수 있게 한다 */
-const DELAY_MS = 300;
+/** 기본 응답 지연(ms). 로딩 스켈레톤을 확인할 수 있게 한다 */
+const DEFAULT_DELAY_MS = 300;
 
 /** 이 검색어로 검색하면 해당 에러를 재현한다 */
 const ERROR_QUERIES: Record<string, YouTubeApiError['code']> = {
@@ -29,19 +29,28 @@ const ERROR_QUERIES: Record<string, YouTubeApiError['code']> = {
 };
 
 const PAGE_TOKEN_PREFIX = 'mock:';
+const PAGE_TOKEN_PATTERN = /^mock:(\d+)$/;
+
+/**
+ * 응답 지연(ms). MOCK_DELAY_MS 환경변수로 바꿀 수 있다.
+ * 예: 스켈레톤을 오래 보고 싶으면 2000, 테스트에서는 0
+ */
+function delayMs(): number {
+  const raw = process.env.MOCK_DELAY_MS;
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_DELAY_MS;
+}
 
 function wait(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+  return new Promise((resolve) => setTimeout(resolve, delayMs()));
 }
 
 /** pageToken을 목록의 시작 위치로 바꾼다. 형식이 틀리면 실제 API처럼 BAD_REQUEST */
 function parsePageToken(pageToken: string | undefined): number {
   if (!pageToken) return 0;
-  const offset = Number(pageToken.slice(PAGE_TOKEN_PREFIX.length));
-  if (!pageToken.startsWith(PAGE_TOKEN_PREFIX) || !Number.isInteger(offset) || offset < 0) {
-    throw new YouTubeApiError('BAD_REQUEST', '잘못된 페이지 토큰입니다.');
-  }
-  return offset;
+  const match = PAGE_TOKEN_PATTERN.exec(pageToken);
+  if (!match) throw new YouTubeApiError('BAD_REQUEST', '잘못된 페이지 토큰입니다.');
+  return Number(match[1]);
 }
 
 function paginate(list: Video[], pageToken: string | undefined, size: number): Page<Video> {
