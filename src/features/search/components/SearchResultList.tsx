@@ -110,13 +110,17 @@ export default function SearchResultList({
     );
   }
 
-  // YouTube 검색은 다음 페이지에 이전 페이지와 같은 영상을 다시 줄 때가 있어서 id 기준으로 한 번만 보여준다
+  // YouTube 검색은 다음 페이지에 이전 페이지와 같은 영상을 다시 줄 때가 있어서 id 기준으로 한 번만 보여준다.
+  // 임베드가 막힌 영상은 IFrame 플레이어로 재생할 수 없으므로 목록에서 뺀다 (기획서 리스크: 재생 제한)
   const seen = new Set<string>();
   const videos = data.pages
     .flatMap((page) => page.items)
-    .filter((video) => !seen.has(video.id) && seen.add(video.id));
+    .filter((video) => !seen.has(video.id) && seen.add(video.id))
+    .filter((video) => video.embeddable);
 
-  if (videos.length === 0) {
+  // 다음 페이지가 남아 있으면 이번 페이지가 전부 빠졌어도 "결과 없음"으로 끝내지 않고 더 보기를 보여준다.
+  // (자동으로 다음 페이지를 불러오면 search.list 할당량을 사용자가 모르게 쓰게 되므로 버튼으로 둔다)
+  if (videos.length === 0 && !hasNextPage) {
     return (
       <StateMessage title="검색 결과가 없어요">
         <p className="text-sub text-sm">
@@ -130,6 +134,12 @@ export default function SearchResultList({
 
   return (
     <div>
+      {videos.length === 0 && (
+        <p className="text-sub py-8 text-center text-sm">
+          지금까지 불러온 결과 중에는 재생할 수 있는 영상이 없어요. 더 보기로 다음 결과를 확인해
+          보세요.
+        </p>
+      )}
       <ul className="space-y-4">
         {videos.map((video) => (
           <SearchResultCard key={video.id} video={video} />
