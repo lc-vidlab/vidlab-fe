@@ -206,7 +206,7 @@ export default function FeedPage() {
                   type="button"
                   aria-pressed={categoryId === ''}
                   onClick={() => setCategoryId('')}
-                  className={`focus-visible:outline-accent shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${categoryId === '' ? 'bg-text text-bg' : 'bg-surface text-sub hover:text-text'}`}
+                  className={`focus-visible:outline-accent shrink-0 rounded-lg px-2 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${categoryId === '' ? 'bg-text text-bg' : 'bg-surface text-sub hover:text-text'}`}
                 >
                   전체
                 </button>
@@ -216,7 +216,7 @@ export default function FeedPage() {
                     type="button"
                     aria-pressed={categoryId === item.id}
                     onClick={() => setCategoryId(item.id)}
-                    className={`focus-visible:outline-accent shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${categoryId === item.id ? 'bg-text text-bg' : 'bg-surface text-sub hover:text-text'}`}
+                    className={`focus-visible:outline-accent shrink-0 rounded-lg px-2 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${categoryId === item.id ? 'bg-text text-bg' : 'bg-surface text-sub hover:text-text'}`}
                   >
                     {item.title}
                   </button>
