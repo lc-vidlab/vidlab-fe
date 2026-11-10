@@ -10,7 +10,8 @@ import {
 import { PAGE_SIZE } from './constants';
 import { YouTubeApiError } from './errors';
 import { mockService as mock } from './mock';
-import { isVideoId } from './validation';
+import { MAX_QUERY_LENGTH } from './validation';
+import { isVideoId } from './video-id';
 
 // mock 데이터를 고치다가 팀원이 쓰는 상태(페이지네이션, 에러 재현 등)를 깨뜨리지 않았는지 확인한다.
 // 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/4
@@ -208,4 +209,11 @@ describe('getRelatedVideos', () => {
       await expect(mock.getRelatedVideos({ categoryId })).resolves.toEqual([]);
     },
   );
+});
+
+describe('검색어 길이', () => {
+  it(`${MAX_QUERY_LENGTH}자까지는 받고, 넘으면 BAD_REQUEST`, async () => {
+    await expect(mock.searchVideos({ q: 'a'.repeat(MAX_QUERY_LENGTH) })).resolves.toBeDefined();
+    await expectApiError(mock.searchVideos({ q: 'a'.repeat(MAX_QUERY_LENGTH + 1) }), 'BAD_REQUEST');
+  });
 });

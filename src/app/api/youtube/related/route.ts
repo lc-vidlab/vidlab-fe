@@ -11,7 +11,7 @@ export function GET(request: NextRequest) {
   return respond(() => {
     const params = queryParams(request.nextUrl.searchParams);
     return getRelatedVideos({
-      categoryId: params.required('categoryId'),
+      categoryId: params.requiredCategoryId(),
       excludeId: params.optional('excludeId'),
       maxResults: params.maxResults(),
     });

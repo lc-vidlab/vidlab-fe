@@ -44,6 +44,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  // console.error를 숨기는 spy 등을 되돌린다
+  vi.restoreAllMocks();
 });
 
 describe('GET /api/youtube/popular', () => {
@@ -66,6 +68,7 @@ describe('GET /api/youtube/popular', () => {
     const page = await json<Page<Video>>(
       await getPopular(request('/api/youtube/popular?categoryId=10')),
     );
+    expect(page.items.length).toBeGreaterThan(0);
     expect(page.items.every((v) => v.categoryId === '10')).toBe(true);
   });
 
@@ -77,17 +80,32 @@ describe('GET /api/youtube/popular', () => {
     );
   });
 
-  it.each([['0'], ['51'], ['abc'], ['1.5']])('maxResults=%s 는 400', async (value) => {
+  it.each([['0'], ['51'], ['abc'], ['1.5'], ['0x10'], ['1e1']])(
+    'maxResults=%s 는 400',
+    async (value) => {
+      await expectError(
+        await getPopular(request(`/api/youtube/popular?maxResults=${value}`)),
+        400,
+        'BAD_REQUEST',
+      );
+    },
+  );
+
+  it.each([
+    ['형식은 맞지만 mock에 없는 토큰', 'abc'],
+    ['허용하지 않는 문자', encodeURIComponent('<script>')],
+    ['너무 긴 토큰', 'a'.repeat(201)],
+  ])('잘못된 pageToken(%s)은 400', async (_, token) => {
     await expectError(
-      await getPopular(request(`/api/youtube/popular?maxResults=${value}`)),
+      await getPopular(request(`/api/youtube/popular?pageToken=${token}`)),
       400,
       'BAD_REQUEST',
     );
   });
 
-  it('잘못된 pageToken은 400', async () => {
+  it('숫자가 아닌 categoryId는 YouTube를 부르기 전에 400', async () => {
     await expectError(
-      await getPopular(request('/api/youtube/popular?pageToken=abc')),
+      await getPopular(request('/api/youtube/popular?categoryId=abc')),
       400,
       'BAD_REQUEST',
     );
@@ -114,13 +132,29 @@ describe('GET /api/youtube/search', () => {
     expect(page.items.every((v) => v.channel.title === channel)).toBe(true);
   });
 
-  it('order · publishedAfter를 서비스에 넘긴다', async () => {
+  it('order=date면 최신순으로 준다', async () => {
+    // 데이터 순서(관련도)와 최신순이 다른 채널을 골라, order가 실제로 전달됐는지 확인한다
+    const channel = MOCK_VIDEOS.find((v) => {
+      const ids = MOCK_VIDEOS.filter((w) => w.channel.title === v.channel.title).map(
+        (w) => w.publishedAt,
+      );
+      return ids.length >= 2 && ids.join() !== [...ids].sort().reverse().join();
+    })!.channel.title;
+    const page = await json<Page<Video>>(
+      await getSearch(request(`/api/youtube/search?q=${encodeURIComponent(channel)}&order=date`)),
+    );
+    const times = page.items.map((v) => v.publishedAt);
+    expect(times.length).toBeGreaterThanOrEqual(2);
+    expect(times).toEqual([...times].sort().reverse());
+  });
+
+  it('publishedAfter 이후 영상만 준다', async () => {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const recent = MOCK_VIDEOS.find((v) => v.publishedAt >= since)!;
     const page = await json<Page<Video>>(
       await getSearch(
         request(
-          `/api/youtube/search?q=${encodeURIComponent(recent.channel.title)}&order=date&publishedAfter=${since}`,
+          `/api/youtube/search?q=${encodeURIComponent(recent.channel.title)}&publishedAfter=${since}`,
         ),
       ),
     );
@@ -132,9 +166,22 @@ describe('GET /api/youtube/search', () => {
     ['q 없음', '/api/youtube/search'],
     ['빈 q', '/api/youtube/search?q=%20%20'],
     ['잘못된 order', '/api/youtube/search?q=a&order=popular'],
+    ['100자 넘는 q', `/api/youtube/search?q=${'a'.repeat(101)}`],
     ['잘못된 publishedAfter', '/api/youtube/search?q=a&publishedAfter=yesterday'],
+    ['시간대 없는 publishedAfter', '/api/youtube/search?q=a&publishedAfter=2026-11-03T00:00:00'],
+    ['날짜만 있는 publishedAfter', '/api/youtube/search?q=a&publishedAfter=2026-11-03'],
+    ['없는 날짜', '/api/youtube/search?q=a&publishedAfter=2026-02-31T00:00:00Z'],
   ])('%s → 400', async (_, path) => {
     await expectError(await getSearch(request(path)), 400, 'BAD_REQUEST');
+  });
+
+  it('시간대가 있는 publishedAfter(+09:00)는 받는다', async () => {
+    const response = await getSearch(
+      request(
+        `/api/youtube/search?q=a&publishedAfter=${encodeURIComponent('2026-11-03T09:00:00+09:00')}`,
+      ),
+    );
+    expect(response.status).toBe(200);
   });
 
   it.each([
@@ -182,13 +229,19 @@ describe('GET /api/youtube/related', () => {
     expect(videos.map((v) => v.id)).not.toContain(current.id);
   });
 
-  it('인기 차트가 없는 카테고리는 빈 목록', async () => {
-    const response = await getRelated(request('/api/youtube/related?categoryId=27'));
-    expect(response.status).toBe(200);
-    expect(await json<Video[]>(response)).toEqual([]);
-  });
+  it.each([...MOCK_CATEGORIES_WITHOUT_CHART])(
+    '인기 차트가 없는 카테고리(%s)는 빈 목록',
+    async (id) => {
+      const response = await getRelated(request(`/api/youtube/related?categoryId=${id}`));
+      expect(response.status).toBe(200);
+      expect(await json<Video[]>(response)).toEqual([]);
+    },
+  );
 
-  it('categoryId가 없으면 400', async () => {
-    await expectError(await getRelated(request('/api/youtube/related')), 400, 'BAD_REQUEST');
+  it.each([
+    ['categoryId 없음', '/api/youtube/related'],
+    ['숫자가 아닌 categoryId', '/api/youtube/related?categoryId=abc'],
+  ])('%s → 400', async (_, path) => {
+    await expectError(await getRelated(request(path)), 400, 'BAD_REQUEST');
   });
 });

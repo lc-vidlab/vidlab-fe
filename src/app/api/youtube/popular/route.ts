@@ -11,8 +11,8 @@ export function GET(request: NextRequest) {
   return respond(() => {
     const params = queryParams(request.nextUrl.searchParams);
     return getPopularVideos({
-      categoryId: params.optional('categoryId'),
-      pageToken: params.optional('pageToken'),
+      categoryId: params.categoryId(),
+      pageToken: params.pageToken(),
       maxResults: params.maxResults(),
     });
   });

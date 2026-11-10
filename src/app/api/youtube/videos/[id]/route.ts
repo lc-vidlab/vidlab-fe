@@ -3,7 +3,7 @@
 
 import { YouTubeApiError } from '@/lib/youtube/errors';
 import { getVideo } from '@/lib/youtube/service';
-import { isVideoId } from '@/lib/youtube/validation';
+import { isVideoId } from '@/lib/youtube/video-id';
 
 import { respond } from '../../_lib/handler';
 

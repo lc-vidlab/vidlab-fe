@@ -17,8 +17,8 @@ export function GET(request: NextRequest) {
       // 빈 검색어 검사는 서비스(requireQuery)에서 한다
       q: params.optional('q') ?? '',
       order: params.oneOf('order', ORDERS),
-      publishedAfter: params.isoDate('publishedAfter'),
-      pageToken: params.optional('pageToken'),
+      publishedAfter: params.dateTime('publishedAfter'),
+      pageToken: params.pageToken(),
       maxResults: params.maxResults(),
     });
   });

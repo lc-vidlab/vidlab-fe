@@ -19,14 +19,34 @@ export async function respond(run: () => Promise<unknown>): Promise<Response> {
   try {
     return Response.json(await run());
   } catch (err) {
+    // YouTube 호출 실패는 client.ts가 원인과 함께 이미 로그를 남긴다.
+    // 여기서는 우리 코드 버그처럼 예상하지 못한 에러만 남긴다 (응답은 502로 나가 YouTube 오류처럼 보이므로)
+    if (!(err instanceof YouTubeApiError)) console.error('[api/youtube] 예상하지 못한 에러', err);
     const apiError = toYouTubeApiError(err);
-    if (apiError.code === 'UPSTREAM_ERROR') console.error('[api/youtube]', err);
     return Response.json(apiError.toJSON(), { status: apiError.status });
   }
 }
 
 function badRequest(message: string): YouTubeApiError {
   return new YouTubeApiError('BAD_REQUEST', message);
+}
+
+/** YouTube 카테고리 id: 숫자 1~4자리 (예: 10) */
+const CATEGORY_ID_PATTERN = /^\d{1,4}$/;
+/** 페이지 토큰: YouTube 토큰(예: CAUQAA)과 mock 토큰(예: mock:24)을 허용 */
+const PAGE_TOKEN_PATTERN = /^[A-Za-z0-9_:-]{1,200}$/;
+/** maxResults: 숫자만 1~2자리. Number()는 0x10 · 1e1도 숫자로 받아들이므로 먼저 거른다 */
+const MAX_RESULTS_PATTERN = /^\d{1,2}$/;
+/**
+ * 시간대가 있는 ISO 8601 시각 (예: 2026-11-03T00:00:00Z, 2026-11-03T09:00:00+09:00).
+ * 시간대가 없으면 서버 시간대로 해석돼 배포 환경(UTC)과 로컬(KST)의 결과가 9시간 달라지므로 받지 않는다.
+ */
+const DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** 2026-02-31처럼 없는 날짜인지 확인한다 (Date는 3월 3일로 넘겨 버린다) */
+function isRealDate(year: number, month: number, day: number): boolean {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
 /** 쿼리 파라미터 읽기 도우미. 형식이 틀리면 BAD_REQUEST를 던진다 (respond가 400으로 바꾼다) */
@@ -36,23 +56,38 @@ export function queryParams(searchParams: URLSearchParams) {
     return searchParams.get(name)?.trim() || undefined;
   }
 
+  function matching(name: string, pattern: RegExp, message: string): string | undefined {
+    const value = optional(name);
+    if (value !== undefined && !pattern.test(value)) throw badRequest(message);
+    return value;
+  }
+
+  function categoryId(): string | undefined {
+    return matching('categoryId', CATEGORY_ID_PATTERN, 'categoryId는 숫자여야 합니다. (예: 10)');
+  }
+
   return {
     optional,
 
-    required(name: string): string {
-      const value = optional(name);
-      if (value === undefined) throw badRequest(`${name} 파라미터가 필요합니다.`);
+    categoryId,
+
+    requiredCategoryId(): string {
+      const value = categoryId();
+      if (value === undefined) throw badRequest('categoryId 파라미터가 필요합니다.');
       return value;
+    },
+
+    pageToken(): string | undefined {
+      return matching('pageToken', PAGE_TOKEN_PATTERN, '잘못된 페이지 토큰입니다.');
     },
 
     /** 1 ~ MAX_PER_REQUEST(50) 정수 */
     maxResults(): number | undefined {
-      const value = optional('maxResults');
+      const message = `maxResults는 1~${MAX_PER_REQUEST} 사이 정수여야 합니다.`;
+      const value = matching('maxResults', MAX_RESULTS_PATTERN, message);
       if (value === undefined) return undefined;
       const n = Number(value);
-      if (!Number.isInteger(n) || n < 1 || n > MAX_PER_REQUEST) {
-        throw badRequest(`maxResults는 1~${MAX_PER_REQUEST} 사이 정수여야 합니다.`);
-      }
+      if (n < 1 || n > MAX_PER_REQUEST) throw badRequest(message);
       return n;
     },
 
@@ -66,12 +101,15 @@ export function queryParams(searchParams: URLSearchParams) {
       return value as T;
     },
 
-    /** ISO 8601 날짜 · 시각 (예: 2026-11-03T00:00:00Z) */
-    isoDate(name: string): string | undefined {
+    /** 시간대가 있는 ISO 8601 시각. UTC 기준 ISO 문자열로 바꿔 돌려준다 */
+    dateTime(name: string): string | undefined {
       const value = optional(name);
       if (value === undefined) return undefined;
-      if (!/^\d{4}-\d{2}-\d{2}/.test(value) || Number.isNaN(Date.parse(value))) {
-        throw badRequest(`${name}는 ISO 8601 날짜여야 합니다. (예: 2026-11-03T00:00:00Z)`);
+      const match = DATETIME_PATTERN.exec(value);
+      if (!match || !isRealDate(Number(match[1]), Number(match[2]), Number(match[3]))) {
+        throw badRequest(
+          `${name}는 시간대가 있는 ISO 8601 시각이어야 합니다. (예: 2026-11-03T00:00:00Z)`,
+        );
       }
       return new Date(value).toISOString();
     },
