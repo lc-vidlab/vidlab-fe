@@ -40,6 +40,11 @@ export class YouTubeApiError extends Error {
   }
 }
 
+/** 없는 영상 · 비공개 영상. live와 mock이 같은 문구를 쓰도록 한 곳에서 만든다 */
+export function videoNotFoundError(): YouTubeApiError {
+  return new YouTubeApiError('NOT_FOUND', '영상을 찾을 수 없습니다.');
+}
+
 /** 어떤 에러든 프론트로 보낼 수 있는 YouTubeApiError로 바꾼다 */
 export function toYouTubeApiError(err: unknown): YouTubeApiError {
   if (err instanceof YouTubeApiError) return err;

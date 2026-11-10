@@ -7,7 +7,7 @@ import 'server-only';
 
 import { ytFetch } from './client';
 import { MAX_PER_REQUEST, PAGE_SIZE, pageSize } from './constants';
-import { YouTubeApiError } from './errors';
+import { YouTubeApiError, videoNotFoundError } from './errors';
 import { toChannel, toVideo, toVideoCategory } from './normalize';
 import type {
   Channel,
@@ -23,6 +23,7 @@ import type {
   YtVideo,
   YtVideoCategory,
 } from './types';
+import { requireQuery } from './validation';
 
 const REGION_CODE = 'KR';
 const LANGUAGE = 'ko';
@@ -143,8 +144,7 @@ export async function getVideoCategories(): Promise<VideoCategory[]> {
  * @throws YouTubeApiError BAD_REQUEST: 검색어가 비어 있음
  */
 export async function searchVideos(params: SearchVideosParams): Promise<Page<Video>> {
-  const q = params.q.trim();
-  if (!q) throw new YouTubeApiError('BAD_REQUEST', '검색어를 입력하세요.');
+  const q = requireQuery(params.q);
 
   const res = await ytFetch<YtListResponse<YtSearchResult>>('search', {
     part: 'snippet',
@@ -174,7 +174,7 @@ export async function searchVideos(params: SearchVideosParams): Promise<Page<Vid
  */
 export async function getVideo(id: string): Promise<Video> {
   const [raw] = await fetchVideosByIds([id]);
-  if (!raw) throw new YouTubeApiError('NOT_FOUND', '영상을 찾을 수 없습니다.');
+  if (!raw) throw videoNotFoundError();
   const [video] = await normalizeVideos([raw]);
   return video;
 }

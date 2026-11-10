@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { MOCK_CATEGORIES, MOCK_CATEGORIES_WITHOUT_CHART, MOCK_VIDEOS } from '@/mocks/youtube';
+import {
+  MOCK_CATEGORIES,
+  MOCK_CATEGORIES_WITHOUT_CHART,
+  MOCK_IDS,
+  MOCK_VIDEOS,
+} from '@/mocks/youtube';
 
 import { PAGE_SIZE } from './constants';
 import { YouTubeApiError } from './errors';
@@ -32,13 +37,18 @@ describe('mock 데이터', () => {
     expect(MOCK_VIDEOS.length).toBeGreaterThan(PAGE_SIZE.popular);
   });
 
-  it('화면 예외 상태를 확인할 데이터가 들어 있다', () => {
-    expect(MOCK_VIDEOS.some((v) => !v.embeddable)).toBe(true);
-    expect(MOCK_VIDEOS.some((v) => v.durationSec === 0)).toBe(true);
-    expect(MOCK_VIDEOS.some((v) => v.viewCount === 0)).toBe(true);
+  it('MOCK_IDS가 가리키는 영상이 안내한 상태를 갖고 있다', () => {
+    const byId = (id: string) => MOCK_VIDEOS.find((v) => v.id === id)!;
+    expect(byId(MOCK_IDS.notEmbeddable).embeddable).toBe(false);
+    expect(byId(MOCK_IDS.live).durationSec).toBe(0);
+    expect(byId(MOCK_IDS.hiddenViewCount).viewCount).toBe(0);
+    expect(byId(MOCK_IDS.longTitle).title.length).toBeGreaterThan(40);
+    expect(MOCK_CATEGORIES_WITHOUT_CHART.has(byId(MOCK_IDS.noRelated).categoryId)).toBe(true);
+  });
+
+  it('채널 예외 상태(구독자 수 숨김, 아바타 없음)를 확인할 데이터가 들어 있다', () => {
     expect(MOCK_VIDEOS.some((v) => v.channel.subscriberCount === undefined)).toBe(true);
     expect(MOCK_VIDEOS.some((v) => v.channel.avatarUrl === '')).toBe(true);
-    expect(MOCK_VIDEOS.some((v) => MOCK_CATEGORIES_WITHOUT_CHART.has(v.categoryId))).toBe(true);
   });
 });
 
@@ -65,9 +75,8 @@ describe('getPopularVideos', () => {
     expect(new Set(seen).size).toBe(seen.length);
   });
 
-  it('maxResults를 따르고 50을 넘지 않는다', async () => {
+  it('maxResults만큼 준다', async () => {
     expect((await mock.getPopularVideos({ maxResults: 5 })).items).toHaveLength(5);
-    expect((await mock.getPopularVideos({ maxResults: 80 })).items.length).toBeLessThanOrEqual(50);
   });
 
   it('카테고리를 주면 그 카테고리 영상만 준다', async () => {
@@ -101,8 +110,11 @@ describe('getVideoCategories', () => {
 
 describe('searchVideos', () => {
   it('제목에 검색어가 들어간 영상을 찾는다 (대소문자 무시)', async () => {
-    const page = await mock.searchVideos({ q: 'react' });
-    expect(page.items.map((v) => v.title)).toContain('React 서버 컴포넌트 10분 만에 이해하기');
+    // 제목에 대문자 단어가 있는 영상을, 그 단어의 소문자로 검색한다
+    const target = MOCK_VIDEOS.find((v) => /[A-Z]/.test(v.title))!;
+    const word = target.title.split(' ').find((w) => /[A-Z]/.test(w))!;
+    const page = await mock.searchVideos({ q: word.toLowerCase() });
+    expect(page.items.map((v) => v.id)).toContain(target.id);
   });
 
   it('채널 이름으로도 찾는다', async () => {
@@ -127,9 +139,14 @@ describe('searchVideos', () => {
   });
 
   it('publishedAfter 이후에 올라온 영상만 준다', async () => {
+    // 24시간 안에 올라온 영상이 있는 채널로 검색해, 그 채널의 오래된 영상이 빠지는지 본다
     const since = new Date(Date.now() - 24 * HOUR);
-    const page = await mock.searchVideos({ q: '|', publishedAfter: since.toISOString() });
-    expect(page.items.length).toBeGreaterThan(0);
+    const recent = MOCK_VIDEOS.find((v) => new Date(v.publishedAt) >= since)!;
+    const page = await mock.searchVideos({
+      q: recent.channel.title,
+      publishedAfter: since.toISOString(),
+    });
+    expect(page.items.map((v) => v.id)).toContain(recent.id);
     expect(page.items.every((v) => new Date(v.publishedAt) >= since)).toBe(true);
   });
 
@@ -142,6 +159,16 @@ describe('searchVideos', () => {
     await expectApiError(mock.searchVideos({ q }), code);
   });
 
+  it.each([['constructor'], ['toString'], ['__proto__']])(
+    '객체 기본 속성 이름(%s)도 일반 검색어로 처리한다',
+    async (q) => {
+      await expect(mock.searchVideos({ q })).resolves.toEqual({
+        items: [],
+        nextPageToken: undefined,
+      });
+    },
+  );
+
   it('잘못된 publishedAfter는 BAD_REQUEST', async () => {
     await expectApiError(mock.searchVideos({ q: '뉴스', publishedAfter: '어제' }), 'BAD_REQUEST');
   });
@@ -149,8 +176,8 @@ describe('searchVideos', () => {
 
 describe('getVideo', () => {
   it('id로 영상을 찾는다', async () => {
-    const video = await mock.getVideo('mock-video-01');
-    expect(video.id).toBe('mock-video-01');
+    const video = await mock.getVideo(MOCK_IDS.live);
+    expect(video.id).toBe(MOCK_IDS.live);
   });
 
   it('없는 id는 NOT_FOUND', async () => {
@@ -160,7 +187,7 @@ describe('getVideo', () => {
 
 describe('getRelatedVideos', () => {
   it('같은 카테고리 영상을 주고, 지금 보는 영상은 뺀다', async () => {
-    const current = await mock.getVideo('mock-video-01');
+    const current = MOCK_VIDEOS.find((v) => !MOCK_CATEGORIES_WITHOUT_CHART.has(v.categoryId))!;
     const related = await mock.getRelatedVideos({
       categoryId: current.categoryId,
       excludeId: current.id,

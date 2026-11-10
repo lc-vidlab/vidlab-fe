@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MOCK_VIDEOS } from '@/mocks/youtube';
 
-import { getPopularVideos, getVideo, isMockMode } from './service';
+import { isMockMode } from './mode';
+import { getPopularVideos, getVideo } from './service';
 
 describe('USE_MOCK 전환', () => {
   const fetchMock = vi.fn<typeof fetch>();

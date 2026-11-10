@@ -8,9 +8,10 @@ import 'server-only';
 import { MOCK_CATEGORIES, MOCK_CATEGORIES_WITHOUT_CHART, MOCK_VIDEOS } from '@/mocks/youtube';
 
 import { PAGE_SIZE, pageSize } from './constants';
-import { YouTubeApiError } from './errors';
+import { YouTubeApiError, videoNotFoundError } from './errors';
 import type * as live from './live';
 import type {
+  ApiErrorCode,
   Page,
   PopularVideosParams,
   RelatedVideosParams,
@@ -18,15 +19,19 @@ import type {
   Video,
   VideoCategory,
 } from './types';
+import { requireQuery } from './validation';
 
 /** 기본 응답 지연(ms). 로딩 스켈레톤을 확인할 수 있게 한다 */
 const DEFAULT_DELAY_MS = 300;
 
-/** 이 검색어로 검색하면 해당 에러를 재현한다 */
-const ERROR_QUERIES: Record<string, YouTubeApiError['code']> = {
-  __quota__: 'QUOTA_EXCEEDED',
-  __error__: 'UPSTREAM_ERROR',
-};
+/**
+ * 이 검색어로 검색하면 해당 에러를 재현한다.
+ * 일반 객체로 만들면 'constructor' 같은 기본 속성 이름에도 반응하므로 Map을 쓴다.
+ */
+const ERROR_QUERIES = new Map<string, ApiErrorCode>([
+  ['__quota__', 'QUOTA_EXCEEDED'],
+  ['__error__', 'UPSTREAM_ERROR'],
+]);
 
 const PAGE_TOKEN_PREFIX = 'mock:';
 const PAGE_TOKEN_PATTERN = /^mock:(\d+)$/;
@@ -92,10 +97,9 @@ async function getVideoCategories(): Promise<VideoCategory[]> {
 
 async function searchVideos(params: SearchVideosParams): Promise<Page<Video>> {
   await wait();
-  const q = params.q.trim();
-  if (!q) throw new YouTubeApiError('BAD_REQUEST', '검색어를 입력하세요.');
+  const q = requireQuery(params.q);
 
-  const errorCode = ERROR_QUERIES[q];
+  const errorCode = ERROR_QUERIES.get(q);
   if (errorCode) throw new YouTubeApiError(errorCode);
 
   const after = params.publishedAfter ? Date.parse(params.publishedAfter) : undefined;
@@ -118,18 +122,23 @@ async function searchVideos(params: SearchVideosParams): Promise<Page<Video>> {
 async function getVideo(id: string): Promise<Video> {
   await wait();
   const video = MOCK_VIDEOS.find((v) => v.id === id);
-  if (!video) throw new YouTubeApiError('NOT_FOUND', '영상을 찾을 수 없습니다.');
+  if (!video) throw videoNotFoundError();
   return video;
 }
 
 async function getRelatedVideos(params: RelatedVideosParams): Promise<Video[]> {
   await wait();
-  // 실제 구현과 같이: 같은 카테고리 인기 영상을 가져온 뒤 현재 영상을 뺀다
-  if (MOCK_CATEGORIES_WITHOUT_CHART.has(params.categoryId)) return [];
-  const size = pageSize(params.maxResults, PAGE_SIZE.related);
-  return popularList(params.categoryId)
-    .slice(0, size)
-    .filter((v) => v.id !== params.excludeId);
+  // live.ts와 같은 모양: 같은 카테고리 인기 영상에서 현재 영상을 빼고,
+  // 인기 차트가 없는 카테고리(NOT_FOUND)면 빈 목록
+  try {
+    const size = pageSize(params.maxResults, PAGE_SIZE.related);
+    return popularList(params.categoryId)
+      .slice(0, size)
+      .filter((v) => v.id !== params.excludeId);
+  } catch (err) {
+    if (err instanceof YouTubeApiError && err.code === 'NOT_FOUND') return [];
+    throw err;
+  }
 }
 
 /** 실제 구현(live.ts)과 시그니처가 다르면 여기서 타입 에러가 난다 */
