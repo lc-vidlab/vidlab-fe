@@ -6,7 +6,7 @@ import type { NextRequest } from 'next/server';
 
 import { createComment, listComments } from '@/lib/comments/service';
 
-import { clientIp, readCreateCommentRequest, respond } from './_lib/request';
+import { clientIp, readCreateCommentRequest, respond } from './_lib/http';
 
 export function GET(request: NextRequest) {
   return respond(() => {

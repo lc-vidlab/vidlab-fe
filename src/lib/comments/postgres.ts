@@ -33,7 +33,7 @@ function toItem(row: CommentRow): CommentItem {
 const CHECK_VIOLATION = '23514';
 
 /** 로그에 남길 에러 요약. 쿼리 값(해시 등)이 로그에 실리지 않도록 코드 · 메시지만 고른다 */
-function describe(err: unknown): { code?: unknown; message: string } {
+function summarizeDbError(err: unknown): { code?: unknown; message: string } {
   if (!(err instanceof Error)) return { message: String(err) };
   return { code: 'code' in err ? err.code : undefined, message: err.message };
 }
@@ -43,7 +43,7 @@ function describe(err: unknown): { code?: unknown; message: string } {
  * CHECK 위반은 rules.ts 검사를 빠져나간 입력이라 400으로 응답한다.
  */
 function toApiError(err: unknown, action: string): CommentApiError {
-  const detail = describe(err);
+  const detail = summarizeDbError(err);
   if (detail.code === CHECK_VIOLATION) {
     console.warn(`[comments] ${action}: DB CHECK 위반. rules.ts 검사를 확인하세요`, detail);
     return validationError();
@@ -52,7 +52,8 @@ function toApiError(err: unknown, action: string): CommentApiError {
   return new CommentApiError('SERVER_ERROR');
 }
 
-async function run<T>(action: string, query: () => Promise<T>): Promise<T> {
+/** 쿼리를 실행하고, 실패하면 응답용 에러로 바꿔 던진다 */
+async function withDbError<T>(action: string, query: () => Promise<T>): Promise<T> {
   try {
     return await query();
   } catch (err) {
@@ -62,7 +63,7 @@ async function run<T>(action: string, query: () => Promise<T>): Promise<T> {
 
 export const postgresStore: CommentStore = {
   findPage(videoId, { beforeId, limit }) {
-    return run('목록 조회', async () => {
+    return withDbError('목록 조회', async () => {
       const sql = getDb();
       // 인덱스 (video_id, id desc)를 그대로 탄다
       const rows = await sql<CommentRow[]>`
@@ -78,7 +79,7 @@ export const postgresStore: CommentStore = {
   },
 
   count(videoId) {
-    return run('개수 조회', async () => {
+    return withDbError('개수 조회', async () => {
       const sql = getDb();
       const [{ count }] = await sql<{ count: number }[]>`
         select count(*)::int as count from comments where video_id = ${videoId}
@@ -88,7 +89,7 @@ export const postgresStore: CommentStore = {
   },
 
   insert(record: NewCommentRecord) {
-    return run('작성', async () => {
+    return withDbError('작성', async () => {
       const sql = getDb();
       const [row] = await sql<CommentRow[]>`
         insert into comments (video_id, nickname, content, password_hash, ip_hash)

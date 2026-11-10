@@ -1,6 +1,7 @@
 import 'server-only';
 
-// /api/comments 요청 읽기 · 응답 변환. HTTP 형식만 다루고, 규칙 검사는 service.ts가 한다.
+// /api/comments의 HTTP 처리: 요청 본문 · IP 읽기, 결과 · 에러를 JSON 응답으로 바꾸기.
+// HTTP 형식만 다루고, 입력 규칙 검사는 service.ts가 한다.
 // 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/19
 
 import { badRequest, toCommentApiError, CommentApiError } from '@/lib/comments/errors';
@@ -20,9 +21,13 @@ export async function respond(run: () => Promise<unknown>, status = 200): Promis
 
 /**
  * 본문 최대 크기(문자 수). 정상 입력은 1KB 남짓이다 (내용 500자 + 닉네임 · 비밀번호).
- * 이모지 500자를 JSON 이스케이프(😀)로 보내도 6000자 정도라 여유를 둔다.
+ * 이모지 500자를 JSON 이스케이프(이모지 1자 = 12자)로 보내도 6000자 정도라 여유를 둔다.
  */
 const MAX_BODY_LENGTH = 16_000;
+
+function bodyTooLarge() {
+  return badRequest('요청 본문이 너무 큽니다.');
+}
 
 const BODY_FIELDS = ['videoId', 'nickname', 'password', 'content'] as const;
 
@@ -44,8 +49,12 @@ export async function readCreateCommentRequest(request: Request): Promise<Create
     throw badRequest('Content-Type은 application/json이어야 합니다.');
   }
 
+  // 큰 본문을 메모리에 다 올리기 전에 헤더로 먼저 거른다 (UTF-8 한 글자는 최대 4바이트)
+  const declaredBytes = Number(request.headers.get('content-length'));
+  if (declaredBytes > MAX_BODY_LENGTH * 4) throw bodyTooLarge();
+
   const text = await request.text();
-  if (text.length > MAX_BODY_LENGTH) throw badRequest('요청 본문이 너무 큽니다.');
+  if (text.length > MAX_BODY_LENGTH) throw bodyTooLarge();
 
   let body: unknown;
   try {
@@ -63,6 +72,9 @@ export async function readCreateCommentRequest(request: Request): Promise<Create
 /**
  * 작성자 IP. 배포 환경(Vercel)이 넣어 주는 x-forwarded-for의 첫 값(실제 접속 IP)을 쓴다.
  * 로컬 개발처럼 헤더가 없으면 'unknown' (모두 같은 IP로 취급).
+ *
+ * Vercel은 이 헤더를 직접 채우므로 사용자가 위조할 수 없다. Vercel 밖에 배포하거나 앞에 다른 프록시를 두면
+ * 사용자가 보낸 값이 첫 값이 될 수 있으니, 횟수 제한(CMT-05)을 만들 때 그 환경에 맞게 다시 정한다.
  */
 export function clientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();

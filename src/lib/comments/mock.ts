@@ -66,6 +66,7 @@ export const mockStore: CommentStore = {
   },
 
   async count(videoId) {
+    await mockDelay();
     return db().rows.filter((row) => row.videoId === videoId).length;
   },
 

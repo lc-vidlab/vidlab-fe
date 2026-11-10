@@ -148,7 +148,7 @@ describe('POST /api/comments', () => {
 
   it('400 VALIDATION_ERROR: 칸별 메시지를 담는다', async () => {
     const error = await expectError(
-      await post({ ...VALID_BODY, nickname: 'ㅤㅤ', password: '1', content: ' ' }),
+      await post({ ...VALID_BODY, nickname: '\u3164\u3164', password: '1', content: ' ' }),
       'VALIDATION_ERROR',
     );
     expect(error.fields).toEqual({

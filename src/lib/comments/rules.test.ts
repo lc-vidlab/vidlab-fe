@@ -21,11 +21,15 @@ function valueOf(patch: Partial<CommentInput>): CommentInput {
 }
 
 // 문자 코드로 적어 둔다 (소스에 보이지 않는 문자를 직접 넣지 않기 위해)
-const HANGUL_FILLER = 'ㅤ';
-const ZERO_WIDTH_SPACE = '​';
-const RTL_OVERRIDE = '‮';
-const NBSP = ' ';
-const ZWJ = '‍';
+const HANGUL_FILLER = '\u3164';
+const ZERO_WIDTH_SPACE = '\u200B';
+const RTL_OVERRIDE = '\u202E';
+const NBSP = '\u00A0';
+const BRAILLE_BLANK = '\u2800';
+const COMBINING_ACUTE = '\u0301';
+const GRAPHEME_JOINER = '\u034F';
+const PRIVATE_USE = '\uE000';
+const ZWJ = '\u200D';
 const FAMILY = `\u{1F468}${ZWJ}\u{1F469}${ZWJ}\u{1F467}`;
 /** NFD로 쓴 '가' (ㄱ + ㅏ) */
 const NFD_GA = '가';
@@ -57,6 +61,7 @@ describe('validateCommentInput', () => {
       ['13자', '가'.repeat(13)],
       ['공백뿐', '   '],
       ['이모지 13자', '😀'.repeat(13)],
+      ['결합 문자뿐', COMBINING_ACUTE.repeat(2)],
     ])('글자 수 오류: %s', (_, nickname) => {
       expect(errorsOf({ nickname }).nickname).toBe('닉네임은 2~12자로 입력해 주세요.');
     });
@@ -69,6 +74,10 @@ describe('validateCommentInput', () => {
       ['가운데 줄바꿈', '닉\n네임'],
       ['NUL', '닉\u0000네임'],
       ['짝 없는 서로게이트', '닉\uD800네임'],
+      ['점자 빈칸', BRAILLE_BLANK.repeat(2)],
+      ['결합 자소 결합자', `a${GRAPHEME_JOINER.repeat(2)}`],
+      ['사용자 정의 영역', PRIVATE_USE.repeat(2)],
+      ['결합 문자 5개 쌓기', `닉${COMBINING_ACUTE.repeat(5)}네임`],
     ])('쓸 수 없는 문자: %s', (_, nickname) => {
       expect(errorsOf({ nickname }).nickname).toBe('닉네임에 쓸 수 없는 문자가 있어요.');
     });
@@ -129,6 +138,8 @@ describe('validateCommentInput', () => {
       ['이모지 500자', '😀'.repeat(500)],
       ['줄바꿈 · 탭', '첫 줄\n\t둘째 줄'],
       ['ZWJ로 이은 가족 이모지', `가족 ${FAMILY}`],
+      ['키캡 이모지 (결합 문자 2개)', '1\uFE0F\u20E3'],
+      ['결합 문자 4개', `a${COMBINING_ACUTE.repeat(4)}`],
     ])('받음: %s', (_, content) => {
       expect(errorsOf({ content })).toEqual({});
     });
@@ -139,6 +150,8 @@ describe('validateCommentInput', () => {
       ['501자', '가'.repeat(501)],
       ['한글 채움 문자뿐', HANGUL_FILLER.repeat(3)],
       ['ZWJ뿐', ZWJ],
+      ['점자 빈칸뿐', BRAILLE_BLANK],
+      ['결합 문자뿐', COMBINING_ACUTE],
     ])('글자 수 오류: %s', (_, content) => {
       expect(errorsOf({ content }).content).toBe('댓글은 1~500자로 입력해 주세요.');
     });
@@ -148,6 +161,7 @@ describe('validateCommentInput', () => {
       ['방향 바꾸기 문자', `${RTL_OVERRIDE}내용`],
       ['NUL', '내용\u0000'],
       ['짝 없는 서로게이트', '내용\uDC00'],
+      ['결합 문자 쌓기 (Zalgo)', `a${COMBINING_ACUTE.repeat(499)}`],
     ])('쓸 수 없는 문자: %s', (_, content) => {
       expect(errorsOf({ content }).content).toBe('댓글에 쓸 수 없는 문자가 있어요.');
     });

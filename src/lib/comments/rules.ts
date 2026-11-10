@@ -26,10 +26,14 @@ const PASSWORD_MAX_BYTES = 72;
 // - Cc: 제어 문자 (NUL · 탭 · 줄바꿈 등)
 // - Cf: 서식 문자 (제로폭 공백 U+200B, 방향 바꾸기 U+202E 등). 화면에 안 보이거나 글을 뒤집는다
 // - Cs: 짝이 없는 서로게이트. 올바른 UTF-8이 아니라 DB에 저장할 수 없다
-// - 한글 채움 문자 (U+115F, U+1160, U+3164, U+FFA0): 공백처럼 보이지만 공백으로 취급되지 않는다
+// - Co: 사용자 정의 영역. 글꼴마다 다르게 보이거나 빈칸으로 보인다
+// - M: 결합 문자 (앞 글자에 붙는 기호). 여러 개를 쌓으면 위아래 줄을 덮는다
+// - 빈칸처럼 보이는 글자: 한글 채움 문자(U+115F, U+1160, U+3164, U+FFA0) · 점자 빈칸(U+2800) ·
+//   결합 자소 결합자(U+034F). 공백으로 취급되지 않아 trim()으로 지워지지 않는다
+// 보이지 않는 문자는 소스에 그대로 넣지 않고 \u 이스케이프로 쓴다 (편집기에서 보이지 않고 지워질 수 있다)
 
-/** 닉네임: 제어 · 서식 문자와 한글 채움 문자를 모두 거부 */
-const NICKNAME_FORBIDDEN = /[\p{Cc}\p{Cf}\p{Cs}ᅟᅠㅤﾠ]/u;
+/** 닉네임: 제어 · 서식 · 사용자 정의 문자와 빈칸처럼 보이는 글자를 모두 거부 */
+const NICKNAME_FORBIDDEN = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\u115F\u1160\u3164\uFFA0\u2800\u034F]/u;
 
 /**
  * 내용: 줄바꿈(\n) · 탭(\t)과 ZWJ(U+200D, 가족 이모지처럼 이모지 여러 개를 한 글자로 잇는 문자)는 허용.
@@ -37,8 +41,17 @@ const NICKNAME_FORBIDDEN = /[\p{Cc}\p{Cf}\p{Cs}ᅟᅠㅤﾠ]/u;
  */
 const CONTENT_FORBIDDEN = /(?![\t\n\u200D])[\p{Cc}\p{Cf}\p{Cs}]/u;
 
-/** 보이는 글자: 공백 · 서식 문자 · 한글 채움 문자가 아닌 것. 내용에 하나는 있어야 한다 */
-const VISIBLE_CHAR = /[^\s\p{Cf}ᅟᅠㅤﾠ]/u;
+/**
+ * 보이는 글자: 문자 · 숫자 · 문장부호 · 기호(이모지 포함) 중 빈칸처럼 보이는 글자가 아닌 것.
+ * 닉네임 · 내용에 하나는 있어야 한다 (결합 문자 · 공백만으로는 안 됨)
+ */
+const VISIBLE_CHAR = /(?![\u115F\u1160\u3164\uFFA0\u2800])[\p{L}\p{N}\p{P}\p{S}]/u;
+
+/**
+ * 결합 문자가 이만큼 연달아 붙으면 거부한다.
+ * 정상 입력은 많아야 2~3개다 (예: 키캡 이모지 = 숫자 + U+FE0F + U+20E3)
+ */
+const STACKED_MARKS = /\p{M}{5,}/u;
 
 /** 비밀번호: 제어 문자 · 짝 없는 서로게이트 거부. 공백 · 서식 문자는 그대로 비밀번호로 취급 */
 const PASSWORD_FORBIDDEN = /[\p{Cc}\p{Cs}]/u;
@@ -76,8 +89,10 @@ function normalizePassword(password: string): string {
 
 function nicknameError(nickname: string): string | undefined {
   const { min, max } = COMMENT_RULES.nickname;
-  if (NICKNAME_FORBIDDEN.test(nickname)) return '닉네임에 쓸 수 없는 문자가 있어요.';
-  if (outOfRange(countChars(nickname), COMMENT_RULES.nickname)) {
+  if (NICKNAME_FORBIDDEN.test(nickname) || STACKED_MARKS.test(nickname)) {
+    return '닉네임에 쓸 수 없는 문자가 있어요.';
+  }
+  if (!VISIBLE_CHAR.test(nickname) || outOfRange(countChars(nickname), COMMENT_RULES.nickname)) {
     return `닉네임은 ${min}~${max}자로 입력해 주세요.`;
   }
   return undefined;
@@ -96,7 +111,9 @@ function passwordError(password: string): string | undefined {
 
 function contentError(content: string): string | undefined {
   const { min, max } = COMMENT_RULES.content;
-  if (CONTENT_FORBIDDEN.test(content)) return '댓글에 쓸 수 없는 문자가 있어요.';
+  if (CONTENT_FORBIDDEN.test(content) || STACKED_MARKS.test(content)) {
+    return '댓글에 쓸 수 없는 문자가 있어요.';
+  }
   if (!VISIBLE_CHAR.test(content) || outOfRange(countChars(content), COMMENT_RULES.content)) {
     return `댓글은 ${min}~${max}자로 입력해 주세요.`;
   }

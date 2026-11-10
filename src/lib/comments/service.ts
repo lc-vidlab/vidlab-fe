@@ -45,9 +45,10 @@ export async function listComments(videoId: string, cursor?: string): Promise<Co
   if (cursor !== undefined && !isCursor(cursor)) throw badRequest('잘못된 커서입니다.');
 
   // 한 개 더 읽어서 다음 페이지가 있는지 판단한다
+  const comments = store();
   const [rows, total] = await Promise.all([
-    store().findPage(videoId, { beforeId: cursor, limit: COMMENT_PAGE_SIZE + 1 }),
-    store().count(videoId),
+    comments.findPage(videoId, { beforeId: cursor, limit: COMMENT_PAGE_SIZE + 1 }),
+    comments.count(videoId),
   ]);
   const items = rows.slice(0, COMMENT_PAGE_SIZE);
   const hasNext = rows.length > COMMENT_PAGE_SIZE;
