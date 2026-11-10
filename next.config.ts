@@ -1,8 +1,13 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
+  images: {
+    remotePatterns: [
+      // mock 썸네일 · 아바타 (src/mocks/youtube.ts)
+      new URL('https://picsum.photos/seed/**'),
+    ],
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {

@@ -1,0 +1,130 @@
+'use client';
+
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { fetchSearchPage } from '../api';
+import { isQuotaError } from '../errors';
+import SearchResultCard, { SearchResultCardSkeleton } from './SearchResultCard';
+
+const SKELETON_COUNT = 4;
+
+function SkeletonList() {
+  return (
+    <ul className="space-y-4">
+      {Array.from({ length: SKELETON_COUNT }, (_, i) => (
+        <SearchResultCardSkeleton key={i} />
+      ))}
+    </ul>
+  );
+}
+
+function StateMessage({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <div
+      role="status"
+      className="border-border flex flex-col items-center gap-2 rounded-xl border px-4 py-12 text-center"
+    >
+      <p className="text-text font-medium">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+export default function SearchResultList({ query }: { query: string }) {
+  const {
+    data,
+    error,
+    isPending,
+    isError,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useInfiniteQuery({
+    queryKey: ['search', query],
+    queryFn: ({ pageParam }) => fetchSearchPage(query, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextPageToken ?? undefined,
+    // 할당량 초과는 재시도해도 실패하므로 바로 안내한다. 그 외 오류는 1회만 재시도.
+    retry: (failureCount, err) => !isQuotaError(err) && failureCount < 1,
+  });
+
+  if (isPending) {
+    return (
+      <div aria-busy="true">
+        <span className="sr-only">검색 결과를 불러오는 중</span>
+        <SkeletonList />
+      </div>
+    );
+  }
+
+  if (isError && !isFetchNextPageError) {
+    if (isQuotaError(error)) {
+      return (
+        <StateMessage title="오늘 검색 가능 횟수를 모두 사용했어요">
+          <p className="text-sub text-sm">
+            검색 할당량은 매일 오후 5시(한국 시간)에 초기화됩니다. 그때 다시 시도해 주세요.
+          </p>
+        </StateMessage>
+      );
+    }
+    return (
+      <StateMessage title="검색 결과를 불러오지 못했어요">
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isRefetching}
+          className="border-border text-text hover:bg-surface mt-2 rounded-full border px-4 py-2 text-sm disabled:opacity-50"
+        >
+          {isRefetching ? '다시 시도하는 중…' : '다시 시도'}
+        </button>
+      </StateMessage>
+    );
+  }
+
+  const videos = data.pages.flatMap((page) => page.items);
+
+  if (videos.length === 0) {
+    return (
+      <StateMessage title="검색 결과가 없어요">
+        <p className="text-sub text-sm">다른 검색어를 입력하거나 철자를 확인해 주세요.</p>
+      </StateMessage>
+    );
+  }
+
+  return (
+    <div>
+      <ul className="space-y-4">
+        {videos.map((video) => (
+          <SearchResultCard key={video.id} video={video} />
+        ))}
+        {isFetchingNextPage &&
+          Array.from({ length: 2 }, (_, i) => <SearchResultCardSkeleton key={`more-${i}`} />)}
+      </ul>
+
+      <div className="mt-6 flex flex-col items-center gap-2">
+        {isFetchNextPageError && (
+          <p role="alert" className="text-sub text-sm">
+            {isQuotaError(error)
+              ? '오늘 검색 가능 횟수를 모두 사용해서 더 불러올 수 없어요.'
+              : '결과를 더 불러오지 못했어요.'}
+          </p>
+        )}
+        {hasNextPage ? (
+          <button
+            type="button"
+            onClick={() => fetchNextPage()}
+            // 불러오는 중에는 비활성화해 같은 페이지 중복 요청을 막는다
+            disabled={isFetchingNextPage}
+            className="border-border text-text hover:bg-surface rounded-full border px-6 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {isFetchingNextPage ? '불러오는 중…' : isFetchNextPageError ? '다시 시도' : '더 보기'}
+          </button>
+        ) : (
+          <p className="text-sub text-sm">마지막 검색 결과입니다.</p>
+        )}
+      </div>
+    </div>
+  );
+}
