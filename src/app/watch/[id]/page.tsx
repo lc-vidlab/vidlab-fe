@@ -1,15 +1,58 @@
-// TODO(수현): 영상 상세 구현
 import { Suspense } from 'react';
+import { notFound } from 'next/navigation';
+import { CommentForm } from '@/features/watch/components/CommentForm';
+import { VideoPlayer } from '@/features/watch/components/VideoPlayer';
+import { WatchLayout } from '@/features/watch/components/WatchLayout';
+import {
+  CommentsSkeleton,
+  InfoSkeleton,
+  PlayerSkeleton,
+  RelatedSkeleton,
+} from '@/features/watch/components/WatchSkeletons';
+import { isValidVideoId } from '@/features/watch/lib/video-id';
 
 export default function WatchPage({ params }: PageProps<'/watch/[id]'>) {
   return (
-    <main>
-      <p>영상 상세 (수현)</p>
-      <Suspense fallback={<p>id: ...</p>}>
+    <main className="mx-auto w-full max-w-[1720px] px-4 py-6 lg:px-6">
+      {/* cacheComponents: params는 런타임 데이터라 Suspense 안에서 읽어야 함 */}
+      <Suspense fallback={<WatchFallback />}>
         {params.then(({ id }) => (
-          <p>id: {id}</p>
+          <WatchContent id={id} />
         ))}
       </Suspense>
     </main>
+  );
+}
+
+function WatchContent({ id }: { id: string }) {
+  if (!isValidVideoId(id)) notFound();
+
+  return (
+    <WatchLayout
+      player={<VideoPlayer key={id} videoId={id} />}
+      // TODO(WATCH-03): 영상 · 채널 정보
+      info={<InfoSkeleton />}
+      comments={
+        <div className="flex flex-col gap-6">
+          {/* 영상이 바뀌면 입력 중이던 내용이 남지 않도록 key로 초기화 */}
+          <CommentForm key={id} />
+          {/* TODO(WATCH-06): Vidlab 댓글 목록 (YouTube 댓글 목록 WATCH-04는 범위에서 제외) */}
+          <CommentsSkeleton />
+        </div>
+      }
+      // TODO(WATCH-05): 같은 카테고리 인기 영상
+      related={<RelatedSkeleton />}
+    />
+  );
+}
+
+function WatchFallback() {
+  return (
+    <WatchLayout
+      player={<PlayerSkeleton />}
+      info={<InfoSkeleton />}
+      comments={<CommentsSkeleton />}
+      related={<RelatedSkeleton />}
+    />
   );
 }
