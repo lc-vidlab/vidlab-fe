@@ -53,12 +53,29 @@ describe('mock 데이터', () => {
 });
 
 describe('getPopularVideos', () => {
-  it('조회수 순으로 기본 24개와 다음 페이지 토큰을 준다', async () => {
+  it('조회수 순으로 첫 페이지와 다음 페이지 토큰을 주고 임베드 불가 영상은 제외한다', async () => {
     const page = await mock.getPopularVideos();
-    expect(page.items).toHaveLength(PAGE_SIZE.popular);
+    expect(page.items.length).toBeLessThanOrEqual(PAGE_SIZE.popular);
+    expect(page.items.every((video) => video.embeddable)).toBe(true);
     expect(page.nextPageToken).toBeDefined();
     const views = page.items.map((v) => v.viewCount);
     expect(views).toEqual([...views].sort((a, b) => b - a));
+  });
+
+  it('임베드 불가 영상만 있던 페이지도 다음 페이지 토큰을 유지한다', async () => {
+    let pageToken: string | undefined;
+    let emptyPage: Awaited<ReturnType<typeof mock.getPopularVideos>> | undefined;
+    do {
+      const page = await mock.getPopularVideos({ maxResults: 1, pageToken });
+      if (page.items.length === 0) {
+        emptyPage = page;
+        break;
+      }
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+
+    expect(emptyPage).toBeDefined();
+    expect(emptyPage?.nextPageToken).toBeDefined();
   });
 
   it('토큰으로 끝까지 넘기면 모든 영상을 한 번씩 받고, 마지막 페이지에는 토큰이 없다', async () => {
@@ -70,9 +87,10 @@ describe('getPopularVideos', () => {
       pageToken = page.nextPageToken;
     } while (pageToken);
 
-    // 카테고리를 지정하지 않은 전체 차트에는 19 · 27 카테고리 영상도 들어간다 (실제 API와 같음)
-    expect(seen).toHaveLength(MOCK_VIDEOS.length);
+    // 카테고리를 지정하지 않은 전체 차트에도 임베드 불가 영상은 포함하지 않는다.
+    expect(seen).toHaveLength(MOCK_VIDEOS.filter((video) => video.embeddable).length);
     expect(new Set(seen).size).toBe(seen.length);
+    expect(seen).not.toContain(MOCK_IDS.notEmbeddable);
   });
 
   it('maxResults만큼 준다', async () => {

@@ -87,7 +87,8 @@ function popularList(categoryId: string | undefined): Video[] {
 async function getPopularVideos(params: PopularVideosParams = {}): Promise<Page<Video>> {
   await wait();
   const size = pageSize(params.maxResults, PAGE_SIZE.popular);
-  return paginate(popularList(params.categoryId), params.pageToken, size);
+  const page = paginate(popularList(params.categoryId), params.pageToken, size);
+  return { ...page, items: page.items.filter((video) => video.embeddable) };
 }
 
 async function getVideoCategories(): Promise<VideoCategory[]> {
@@ -134,6 +135,7 @@ async function getRelatedVideos(params: RelatedVideosParams): Promise<Video[]> {
     const size = pageSize(params.maxResults, PAGE_SIZE.related);
     return popularList(params.categoryId)
       .slice(0, size)
+      .filter((video) => video.embeddable)
       .filter((v) => v.id !== params.excludeId);
   } catch (err) {
     if (err instanceof YouTubeApiError && err.code === 'NOT_FOUND') return [];

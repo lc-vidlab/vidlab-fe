@@ -112,13 +112,16 @@ export async function getPopularVideos(params: PopularVideosParams = {}): Promis
   const res = await ytFetch<YtListResponse<YtVideo>>('videos', {
     part: VIDEO_PARTS,
     chart: 'mostPopular',
-    regionCode: REGION_CODE,
+    regionCode: params.regionCode ?? REGION_CODE,
     videoCategoryId: params.categoryId,
     pageToken: params.pageToken,
     maxResults: pageSize(params.maxResults, PAGE_SIZE.popular),
   });
   return {
-    items: await normalizeVideos(res.items ?? []),
+    // status가 없으면 기존 정책대로 허용하고, 명시적으로 false인 영상만 보강 전에 제외한다.
+    items: await normalizeVideos(
+      (res.items ?? []).filter((video) => video.status?.embeddable !== false),
+    ),
     nextPageToken: res.nextPageToken,
   };
 }

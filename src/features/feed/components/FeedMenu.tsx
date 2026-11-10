@@ -1,19 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import {
-  House,
-  Flame,
-  Globe,
-  LayoutGrid,
-  History,
-  ThumbsUp,
-  Bookmark,
-  Sun,
-  Moon,
-  Menu,
-  X,
-} from 'lucide-react';
+import { House, Flame, Globe, LayoutGrid, ListClock, Sun, Moon, Menu, X } from 'lucide-react';
 
 const icons = {
   menu: Menu,
@@ -22,9 +10,7 @@ const icons = {
   popular: Flame,
   country: Globe,
   category: LayoutGrid,
-  history: History,
-  like: ThumbsUp,
-  bookmark: Bookmark,
+  history: ListClock,
   sun: Sun,
   moon: Moon,
 };
@@ -40,13 +26,13 @@ const explore = [
   { icon: 'country', label: '국가별 인기 영상' },
   { icon: 'category', label: '카테고리 탐색' },
 ] as const;
-const activity = [
-  { icon: 'history', label: '최근 시청한 영상' },
-  { icon: 'like', label: '좋아요 누른 영상' },
-  { icon: 'bookmark', label: '나중에 볼 영상' },
-] as const;
+const activity = [{ icon: 'history', label: '최근 시청한 영상' }] as const;
 
-export default function FeedMenu({ onExplore }: { onExplore: (category: boolean) => void }) {
+export default function FeedMenu({
+  onExplore,
+}: {
+  onExplore: (target: 'home' | 'category' | 'country' | 'history') => void;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -80,7 +66,7 @@ export default function FeedMenu({ onExplore }: { onExplore: (category: boolean)
         aria-controls="feed-menu"
         aria-haspopup="dialog"
         onClick={show}
-        className="text-sub hover:bg-surface focus-visible:outline-accent flex h-10 w-10 items-center justify-center rounded-full focus-visible:outline-2"
+        className="text-sub hover:bg-surface focus-visible:outline-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-full focus-visible:outline-2"
       >
         <Icon name="menu" />
       </button>
@@ -96,7 +82,7 @@ export default function FeedMenu({ onExplore }: { onExplore: (category: boolean)
           document.body.style.overflow = previousOverflow.current;
           trigger.current?.focus();
         }}
-        className="bg-surface text-text backdrop:bg-text/20 fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-[285px] max-w-[85vw] border-0 p-0 shadow-xl"
+        className="bg-surface text-text backdrop:bg-text/20 fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-[220px] max-w-[80vw] border-0 p-0 shadow-xl"
       >
         <div className="flex min-h-full flex-col px-2 pb-6">
           <div className="border-border flex h-[69px] shrink-0 items-center justify-end border-b px-2">
@@ -125,12 +111,10 @@ export default function FeedMenu({ onExplore }: { onExplore: (category: boolean)
                     aria-current={icon === 'home' ? 'page' : undefined}
                     className={`${rowClass} ${icon === 'home' ? 'bg-bg' : ''}`}
                     onClick={() => {
-                      if (icon === 'country') {
-                        setNotice('국가별 인기 영상은 준비 중입니다.');
-                        return;
-                      }
                       close();
-                      onExplore(icon === 'category');
+                      onExplore(
+                        icon === 'category' ? 'category' : icon === 'country' ? 'country' : 'home',
+                      );
                     }}
                   >
                     <span className="text-sub">
@@ -154,7 +138,10 @@ export default function FeedMenu({ onExplore }: { onExplore: (category: boolean)
                     key={icon}
                     type="button"
                     className={rowClass}
-                    onClick={() => setNotice(`${label} 기능은 준비 중입니다.`)}
+                    onClick={() => {
+                      close();
+                      onExplore('history');
+                    }}
                   >
                     <span className="text-sub">
                       <Icon name={icon} />

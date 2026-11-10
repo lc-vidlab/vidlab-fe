@@ -1,14 +1,4 @@
-export const categories = ['전체', '여행', '음악', '일상', '요리', '기술', '게임'] as const;
-export type FeedCategory = (typeof categories)[number];
-
-export type FeedVideo = {
-  id: string;
-  title: string;
-  category: Exclude<FeedCategory, '전체'>;
-  duration: string;
-  views: string;
-  uploaded: string;
-};
+import type { FeedVideo } from '../types';
 
 // UI 구성을 위한 예시 데이터. 실제 API 연결 시 교체한다.
 export const feedVideos: FeedVideo[] = [

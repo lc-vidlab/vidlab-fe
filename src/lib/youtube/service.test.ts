@@ -44,4 +44,24 @@ describe('USE_MOCK 전환', () => {
     await expect(getPopularVideos()).resolves.toEqual({ items: [], nextPageToken: undefined });
     expect(String(fetchMock.mock.calls[0][0])).toContain('googleapis.com/youtube/v3/videos');
   });
+
+  it('실제 인기 영상은 status를 요청하고 embeddable=false를 제외하면서 토큰은 유지한다', async () => {
+    vi.stubEnv('USE_MOCK', 'false');
+    vi.stubEnv('YOUTUBE_API_KEY', 'test-key');
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        items: [
+          { id: 'blocked', snippet: { channelId: 'channel' }, status: { embeddable: false } },
+          { id: 'allowed-without-status' },
+        ],
+        nextPageToken: 'next-page',
+      }),
+    );
+    const page = await getPopularVideos({ regionCode: 'US' });
+    expect(page.items.map((video) => video.id)).toEqual(['allowed-without-status']);
+    expect(page.nextPageToken).toBe('next-page');
+    const requestUrl = String(fetchMock.mock.calls[0][0]);
+    expect(requestUrl).toContain('part=snippet%2CcontentDetails%2Cstatistics%2Cstatus');
+    expect(requestUrl).toContain('regionCode=US');
+  });
 });
