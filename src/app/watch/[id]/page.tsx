@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { CommentForm } from '@/features/watch/components/CommentForm';
 import { VideoPlayer } from '@/features/watch/components/VideoPlayer';
 import { WatchLayout } from '@/features/watch/components/WatchLayout';
 import {
@@ -31,8 +32,14 @@ function WatchContent({ id }: { id: string }) {
       player={<VideoPlayer key={id} videoId={id} />}
       // TODO(WATCH-03): 영상 · 채널 정보
       info={<InfoSkeleton />}
-      // TODO(WATCH-04, WATCH-06): 댓글 탭(Vidlab 댓글 / YouTube 댓글)
-      comments={<CommentsSkeleton />}
+      comments={
+        <div className="flex flex-col gap-6">
+          {/* 영상이 바뀌면 입력 중이던 내용이 남지 않도록 key로 초기화 */}
+          <CommentForm key={id} />
+          {/* TODO(WATCH-06): Vidlab 댓글 목록 (YouTube 댓글 목록 WATCH-04는 범위에서 제외) */}
+          <CommentsSkeleton />
+        </div>
+      }
       // TODO(WATCH-05): 같은 카테고리 인기 영상
       related={<RelatedSkeleton />}
     />

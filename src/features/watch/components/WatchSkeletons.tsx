@@ -26,14 +26,10 @@ export function InfoSkeleton() {
   );
 }
 
-/** WATCH-04 · WATCH-06 댓글 탭 자리 */
+/** WATCH-06 Vidlab 댓글 목록 자리 */
 export function CommentsSkeleton() {
   return (
     <div className="flex flex-col gap-5" aria-hidden="true">
-      <div className="flex gap-2">
-        <Bone className="h-8 w-24 rounded-full" />
-        <Bone className="h-8 w-28 rounded-full" />
-      </div>
       {Array.from({ length: 3 }, (_, i) => (
         <div key={i} className="flex gap-3">
           <Bone className="size-10 shrink-0 rounded-full" />
