@@ -1,19 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { requestHomeReset } from './home-reset';
 
 /** 헤더 왼쪽 로고. 홈에서는 새로고침, 다른 화면에서는 처음 상태의 홈으로 이동 */
 export function HeaderLogo() {
-  const pathname = usePathname();
   return (
     <Link
       href="/"
       aria-label="Vidlab 홈"
       onClick={(e) => {
         // 홈에서 누르면 페이지를 새로 불러온다 (새로고침과 같음)
-        if (pathname === '/') {
+        // usePathname()은 Suspense 밖에서 쓰면 cacheComponents 렌더링이 막혀서, 누른 순간의 주소를 직접 읽는다
+        if (window.location.pathname === '/') {
           e.preventDefault();
           // 브라우저가 스크롤 위치를 기억했다가 되살리므로, 먼저 맨 위로 올리고 새로고침한다
           window.scrollTo({ top: 0 });
