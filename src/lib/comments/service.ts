@@ -9,13 +9,18 @@ import 'server-only';
 import { isVideoId } from '@/lib/youtube/video-id';
 
 import { ipHashSalt, isCommentsMockMode } from './config';
-import { badRequest, validationError } from './errors';
-import { hashIp, hashPassword } from './hash';
+import { badRequest, notFound, tooManyAttempts, validationError, wrongPassword } from './errors';
+import { hashIp, hashPassword, verifyPassword } from './hash';
 import { mockStore } from './mock';
 import { postgresStore } from './postgres';
-import { COMMENT_PAGE_SIZE, validateCommentInput } from './rules';
+import {
+  COMMENT_DELETE_RULES,
+  COMMENT_PAGE_SIZE,
+  validateCommentInput,
+  validateDeletePassword,
+} from './rules';
 import type { CommentStore } from './store';
-import type { CommentItem, CommentPage, CreateCommentRequest } from './types';
+import type { CommentItem, CommentPage, CreateCommentRequest, DeleteCommentRequest } from './types';
 
 function store(): CommentStore {
   return isCommentsMockMode() ? mockStore : postgresStore;
@@ -23,13 +28,17 @@ function store(): CommentStore {
 
 /** DB bigint 최댓값. 이보다 큰 숫자를 넘기면 DB가 범위 오류를 낸다 */
 const BIGINT_MAX = '9223372036854775807';
-const CURSOR_PATTERN = /^\d{1,19}$/;
+/**
+ * 0으로 시작하지 않는 1~19자리 숫자. '007'처럼 앞에 0을 붙이면 Postgres는 7로 읽지만
+ * mock은 문자열로 비교해 모드마다 결과가 달라지므로, id가 쓰는 정규 형식만 받는다
+ */
+const COMMENT_ID_PATTERN = /^[1-9]\d{0,18}$/;
 
-/** 커서(댓글 id)가 DB bigint 범위의 양의 정수인지. 숫자가 아니면 DB가 형식 오류(22P02)를 낸다 */
-function isCursor(cursor: string): boolean {
-  if (!CURSOR_PATTERN.test(cursor)) return false;
+/** 댓글 id(커서 포함)가 DB bigint 범위의 양의 정수인지. 숫자가 아니면 DB가 형식 오류(22P02)를 낸다 */
+function isCommentId(id: string): boolean {
+  if (!COMMENT_ID_PATTERN.test(id)) return false;
   // 같은 자릿수끼리는 문자열 비교가 숫자 비교와 같다
-  return cursor.length < BIGINT_MAX.length || cursor <= BIGINT_MAX;
+  return id.length < BIGINT_MAX.length || id <= BIGINT_MAX;
 }
 
 function requireVideoId(videoId: string): void {
@@ -42,7 +51,7 @@ function requireVideoId(videoId: string): void {
  */
 export async function listComments(videoId: string, cursor?: string): Promise<CommentPage> {
   requireVideoId(videoId);
-  if (cursor !== undefined && !isCursor(cursor)) throw badRequest('잘못된 커서입니다.');
+  if (cursor !== undefined && !isCommentId(cursor)) throw badRequest('잘못된 커서입니다.');
 
   // 한 개 더 읽어서 다음 페이지가 있는지 판단한다
   const comments = store();
@@ -78,4 +87,30 @@ export async function createComment(
     passwordHash: await hashPassword(password),
     ipHash,
   });
+}
+
+/**
+ * 비밀번호가 맞으면 댓글을 지운다. 틀리면 남은 횟수를 알려 주고,
+ * maxAttempts번 틀리면 lockMinutes분 동안 그 댓글의 삭제를 잠근다 (#21).
+ */
+export async function deleteComment(id: string, request: DeleteCommentRequest): Promise<void> {
+  if (!isCommentId(id)) throw badRequest('잘못된 댓글 id입니다.');
+  // 저장할 때 통과한 규칙에 안 맞으면 맞을 수 없는 비밀번호라 횟수에 넣지 않는다
+  const password = validateDeletePassword(request.password);
+  if (!password.ok) throw validationError({ password: password.error }, password.error);
+
+  const comments = store();
+  // 비교하기 전에 시도 1회를 먼저 차지한다. 동시 요청으로 횟수 제한을 넘지 못하게 한다
+  const attempt = await comments.reserveDeleteAttempt(id, COMMENT_DELETE_RULES);
+  if (attempt.status === 'not_found') throw notFound();
+  if (attempt.status === 'locked') throw tooManyAttempts(attempt.retryAfterSeconds);
+
+  if (await verifyPassword(password.value, attempt.passwordHash)) {
+    // 그사이 다른 요청이 먼저 지웠으면 없는 댓글
+    if (!(await comments.remove(id))) throw notFound();
+    return;
+  }
+  // 이번 시도로 잠겼으면 429, 아니면 남은 횟수와 함께 403
+  if (attempt.lockedForSeconds !== null) throw tooManyAttempts(attempt.lockedForSeconds);
+  throw wrongPassword(COMMENT_DELETE_RULES.maxAttempts - attempt.attempts);
 }

@@ -64,6 +64,7 @@ const INVALID = [
   ['내용 줄바꿈 · 탭만', { content: '\n\t' }],
   ['내용 501자', { content: '가'.repeat(501) }],
   ['원래 IP', { ip_hash: '127.0.0.1' }],
+  ['음수 삭제 시도 횟수', { delete_attempts: -1 }],
 ];
 
 class Rollback extends Error {}
@@ -125,6 +126,21 @@ try {
       where schemaname = 'public' and indexname = 'comments_video_id_id_idx'
     `;
     check(Boolean(index), '영상별 최신순 인덱스');
+
+    // 삭제 잠금 컬럼 (CMT-04). 없으면 마이그레이션을 실행한다
+    const DELETE_LOCK_COLUMNS = ['delete_attempts', 'delete_locked_until'];
+    const columns = await sql`
+      select column_name from information_schema.columns
+      where table_schema = 'public' and table_name = 'comments'
+        and column_name in ${sql(DELETE_LOCK_COLUMNS)}
+    `;
+    check(
+      columns.length === DELETE_LOCK_COLUMNS.length,
+      '삭제 잠금 컬럼',
+      columns.length === DELETE_LOCK_COLUMNS.length
+        ? ''
+        : 'src/lib/db/migrations/2026-11-11-delete-lock.sql을 SQL Editor에서 실행하세요',
+    );
 
     await inRollback(async (tx) => {
       const [row] = await tx`insert into comments ${tx(VALID)} returning id, created_at`;

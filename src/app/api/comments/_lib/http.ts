@@ -5,17 +5,24 @@ import 'server-only';
 // 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/19
 
 import { badRequest, toCommentApiError, CommentApiError } from '@/lib/comments/errors';
-import type { CreateCommentRequest } from '@/lib/comments/types';
+import type { CreateCommentRequest, DeleteCommentRequest } from '@/lib/comments/types';
 
-/** 요청을 처리하고 JSON으로 응답한다. 실패하면 CommentApiError 형식과 상태 코드로 응답한다 */
+/**
+ * 요청을 처리하고 JSON으로 응답한다. 실패하면 CommentApiError 형식과 상태 코드로 응답한다.
+ * status가 204면 본문 없이 응답한다.
+ */
 export async function respond(run: () => Promise<unknown>, status = 200): Promise<Response> {
   try {
-    return Response.json(await run(), { status });
+    const result = await run();
+    return status === 204 ? new Response(null, { status }) : Response.json(result, { status });
   } catch (err) {
     // 저장소 에러는 postgres.ts가 원인과 함께 이미 남긴다. 여기서는 예상하지 못한 에러(설정 누락 · 버그)만 남긴다
     if (!(err instanceof CommentApiError)) console.error('[api/comments] 예상하지 못한 에러', err);
     const apiError = toCommentApiError(err);
-    return Response.json(apiError.toJSON(), { status: apiError.status });
+    const headers: HeadersInit = apiError.retryAfterSeconds
+      ? { 'Retry-After': String(apiError.retryAfterSeconds) }
+      : {};
+    return Response.json(apiError.toJSON(), { status: apiError.status, headers });
   }
 }
 
@@ -29,21 +36,16 @@ function bodyTooLarge() {
   return badRequest('요청 본문이 너무 큽니다.');
 }
 
-const BODY_FIELDS = ['videoId', 'nickname', 'password', 'content'] as const;
-
-function isCreateCommentRequest(body: unknown): body is CreateCommentRequest {
-  if (typeof body !== 'object' || body === null) return false;
-  const record = body as Record<string, unknown>;
-  return BODY_FIELDS.every((field) => typeof record[field] === 'string');
-}
-
 /**
- * POST 본문을 읽는다. JSON이 아니면 BAD_REQUEST.
+ * JSON 본문을 읽어 fields가 모두 문자열인지 확인하고 그 필드만 돌려준다. 아니면 BAD_REQUEST.
  *
  * Content-Type: application/json만 받는다. 다른 사이트의 폼 전송은 이 형식을 쓸 수 없고,
  * fetch로 보내려면 브라우저가 사전 확인(CORS preflight)을 해서 막힌다 (CSRF 방지).
  */
-export async function readCreateCommentRequest(request: Request): Promise<CreateCommentRequest> {
+async function readStringFields<const F extends string>(
+  request: Request,
+  fields: readonly F[],
+): Promise<Record<F, string>> {
   const contentType = request.headers.get('content-type') ?? '';
   if (!/^application\/json\s*(;|$)/i.test(contentType)) {
     throw badRequest('Content-Type은 application/json이어야 합니다.');
@@ -62,11 +64,26 @@ export async function readCreateCommentRequest(request: Request): Promise<Create
   } catch {
     throw badRequest('요청 본문이 올바른 JSON이 아닙니다.');
   }
-  if (!isCreateCommentRequest(body)) {
-    throw badRequest(`요청 본문에 ${BODY_FIELDS.join(', ')} 문자열이 필요합니다.`);
+  const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+  const picked = {} as Record<F, string>;
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value !== 'string') {
+      throw badRequest(`요청 본문에 ${fields.join(', ')} 문자열이 필요합니다.`);
+    }
+    picked[field] = value;
   }
-  const { videoId, nickname, password, content } = body;
-  return { videoId, nickname, password, content };
+  return picked;
+}
+
+/** POST 본문 (videoId, nickname, password, content) */
+export function readCreateCommentRequest(request: Request): Promise<CreateCommentRequest> {
+  return readStringFields(request, ['videoId', 'nickname', 'password', 'content']);
+}
+
+/** DELETE 본문 (password) */
+export function readDeleteCommentRequest(request: Request): Promise<DeleteCommentRequest> {
+  return readStringFields(request, ['password']);
 }
 
 /**

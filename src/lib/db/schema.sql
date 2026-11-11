@@ -19,7 +19,7 @@ create table if not exists public.comments (
   -- 자동 증가라 큰 id가 더 최근 댓글이다. 최신순 정렬 · 커서 페이지네이션에 id만 쓴다.
   -- (created_at은 마이크로초까지 저장되는데 JS Date는 밀리초까지라, 커서로 쓰면 댓글이 빠질 수 있다)
   -- postgres 드라이버는 bigint를 문자열로 돌려준다.
-  -- 커서 등 밖에서 받은 id는 /^\d{1,19}$/로 먼저 검사한다. 숫자가 아니면 CHECK 위반(23514)이 아닌 22P02 에러가 난다.
+  -- 커서 등 밖에서 받은 id는 /^[1-9]\d{0,18}$/(service.ts)로 먼저 검사한다. 숫자가 아니면 CHECK 위반(23514)이 아닌 22P02 에러가 난다.
   -- (내용에 NUL 문자(\u0000)가 있어도 22021 에러가 나므로 API에서 먼저 거부한다)
   id           bigint generated always as identity primary key,
   -- YouTube 영상 id (src/lib/youtube/video-id.ts와 같은 규칙)
@@ -32,6 +32,12 @@ create table if not exists public.comments (
   ip_hash       text        not null,
   -- 화면 표시용 작성 시각
   created_at    timestamptz not null default now(),
+  -- 삭제 비밀번호 시도 횟수 · 잠금 시각 (CMT-04, #21)
+  -- 시도 횟수는 누적한다. 5번째 시도에서 15분 잠그고, 잠금이 풀린 뒤 다음 시도에서 1부터 다시 센다
+  -- (잠긴 동안 delete_attempts는 5로 남는다. 바꾸는 곳은 comments/postgres.ts의 reserveDeleteAttempt 하나뿐)
+  -- 기존 테이블에는 migrations/2026-11-11-delete-lock.sql로 추가한다
+  delete_attempts     integer     not null default 0,
+  delete_locked_until timestamptz,
 
   constraint comments_video_id_format
     check (video_id ~ '^[A-Za-z0-9_-]{11}$'),
@@ -48,7 +54,9 @@ create table if not exists public.comments (
   constraint comments_content_format
     check (char_length(content) between 1 and 500 and content ~ '\S'),
   constraint comments_ip_hash_format
-    check (ip_hash ~ '^[0-9a-f]{64}$')
+    check (ip_hash ~ '^[0-9a-f]{64}$'),
+  constraint comments_delete_attempts_range
+    check (delete_attempts >= 0)
 );
 
 -- 영상별 최신순 목록 · 커서 페이지네이션 (where video_id = ? and id < ? order by id desc)

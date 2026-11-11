@@ -19,6 +19,9 @@ export const COMMENT_RULES = {
 /** 한 페이지 댓글 수 */
 export const COMMENT_PAGE_SIZE = 20;
 
+/** 삭제 비밀번호를 maxAttempts번 틀리면 그 댓글의 삭제를 lockMinutes분 동안 잠근다 (#21) */
+export const COMMENT_DELETE_RULES = { maxAttempts: 5, lockMinutes: 15 } as const;
+
 /** bcrypt는 72바이트 뒤를 버린다. 이보다 길면 뒷부분이 달라도 같은 비밀번호로 취급된다 */
 const PASSWORD_MAX_BYTES = 72;
 
@@ -130,6 +133,19 @@ function contentError(content: string): string | undefined {
     return `댓글은 ${min}~${max}자로 입력해 주세요.`;
   }
   return undefined;
+}
+
+export type DeletePasswordValidationResult =
+  { ok: true; value: string } | { ok: false; error: string };
+
+/**
+ * 삭제할 때 입력한 비밀번호를 작성 때와 똑같이 정규화하고 검사한다.
+ * 정규화가 다르면 맞는 비밀번호도 틀렸다고 나오므로 validateCommentInput과 같은 함수를 쓴다.
+ */
+export function validateDeletePassword(password: string): DeletePasswordValidationResult {
+  const value = normalizePassword(password);
+  const error = passwordError(value);
+  return error ? { ok: false, error } : { ok: true, value };
 }
 
 export type CommentValidationResult =

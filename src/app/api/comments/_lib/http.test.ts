@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { clientIp, readCreateCommentRequest } from './http';
+import { clientIp, readCreateCommentRequest, readDeleteCommentRequest, respond } from './http';
+import { CommentApiError } from '@/lib/comments/errors';
 
 function withHeaders(headers: Record<string, string>, body?: string): Request {
   return new Request('http://localhost/api/comments', { method: 'POST', headers, body });
@@ -46,5 +47,40 @@ describe('readCreateCommentRequest', () => {
       withHeaders({ 'content-type': 'application/json' }, body),
     );
     expect(result).toEqual({ videoId: 'v', nickname: 'n', password: 'p', content: 'c' });
+  });
+});
+
+describe('readDeleteCommentRequest', () => {
+  it('password만 골라 돌려준다', async () => {
+    const result = await readDeleteCommentRequest(
+      withHeaders({ 'content-type': 'application/json' }, '{"password":"1234","id":"9"}'),
+    );
+    expect(result).toEqual({ password: '1234' });
+  });
+
+  it.each([
+    ['null', 'null'],
+    ['배열', '["1234"]'],
+    ['숫자 password', '{"password":1234}'],
+  ])('BAD_REQUEST: %s', async (_, body) => {
+    await expect(
+      readDeleteCommentRequest(withHeaders({ 'content-type': 'application/json' }, body)),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+describe('respond', () => {
+  it('204면 본문 없이 응답한다', async () => {
+    const response = await respond(async () => undefined, 204);
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe('');
+  });
+
+  it('retryAfterSeconds가 있으면 Retry-After 헤더를 단다', async () => {
+    const response = await respond(async () => {
+      throw new CommentApiError('TOO_MANY_ATTEMPTS', '잠김', { retryAfterSeconds: 90 });
+    });
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('90');
   });
 });
