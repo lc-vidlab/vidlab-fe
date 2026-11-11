@@ -28,7 +28,11 @@ function store(): CommentStore {
 
 /** DB bigint 최댓값. 이보다 큰 숫자를 넘기면 DB가 범위 오류를 낸다 */
 const BIGINT_MAX = '9223372036854775807';
-const COMMENT_ID_PATTERN = /^\d{1,19}$/;
+/**
+ * 0으로 시작하지 않는 1~19자리 숫자. '007'처럼 앞에 0을 붙이면 Postgres는 7로 읽지만
+ * mock은 문자열로 비교해 모드마다 결과가 달라지므로, id가 쓰는 정규 형식만 받는다
+ */
+const COMMENT_ID_PATTERN = /^[1-9]\d{0,18}$/;
 
 /** 댓글 id(커서 포함)가 DB bigint 범위의 양의 정수인지. 숫자가 아니면 DB가 형식 오류(22P02)를 낸다 */
 function isCommentId(id: string): boolean {

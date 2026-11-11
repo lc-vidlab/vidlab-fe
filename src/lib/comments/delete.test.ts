@@ -146,6 +146,8 @@ describe('deleteComment', () => {
   it.each([
     ['숫자가 아닌 id', 'abc'],
     ['음수', '-1'],
+    ['0', '0'],
+    ['앞에 0', '007'],
     ['bigint보다 큼', '9223372036854775808'],
   ])('BAD_REQUEST: %s', async (_, id) => {
     expect((await errorOf(deleteComment(id, { password: PASSWORD }))).code).toBe('BAD_REQUEST');

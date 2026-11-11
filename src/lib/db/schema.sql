@@ -19,7 +19,7 @@ create table if not exists public.comments (
   -- 자동 증가라 큰 id가 더 최근 댓글이다. 최신순 정렬 · 커서 페이지네이션에 id만 쓴다.
   -- (created_at은 마이크로초까지 저장되는데 JS Date는 밀리초까지라, 커서로 쓰면 댓글이 빠질 수 있다)
   -- postgres 드라이버는 bigint를 문자열로 돌려준다.
-  -- 커서 등 밖에서 받은 id는 /^\d{1,19}$/로 먼저 검사한다. 숫자가 아니면 CHECK 위반(23514)이 아닌 22P02 에러가 난다.
+  -- 커서 등 밖에서 받은 id는 /^[1-9]\d{0,18}$/(service.ts)로 먼저 검사한다. 숫자가 아니면 CHECK 위반(23514)이 아닌 22P02 에러가 난다.
   -- (내용에 NUL 문자(\u0000)가 있어도 22021 에러가 나므로 API에서 먼저 거부한다)
   id           bigint generated always as identity primary key,
   -- YouTube 영상 id (src/lib/youtube/video-id.ts와 같은 규칙)

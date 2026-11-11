@@ -112,6 +112,8 @@ describe('GET /api/comments', () => {
     ['videoId 형식', 'videoId=short'],
     ['숫자가 아닌 커서', `videoId=${EMPTY_VIDEO_ID}&cursor=abc`],
     ['음수 커서', `videoId=${EMPTY_VIDEO_ID}&cursor=-1`],
+    ['0 커서', `videoId=${EMPTY_VIDEO_ID}&cursor=0`],
+    ['앞에 0이 붙은 커서', `videoId=${EMPTY_VIDEO_ID}&cursor=007`],
     ['bigint보다 큰 커서', `videoId=${EMPTY_VIDEO_ID}&cursor=9223372036854775808`],
     ['20자리 커서', `videoId=${EMPTY_VIDEO_ID}&cursor=${'1'.repeat(20)}`],
   ])('400 BAD_REQUEST: %s', async (_, query) => {
