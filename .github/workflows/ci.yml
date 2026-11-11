@@ -1,0 +1,51 @@
+# PR과 develop · main push마다 lint → 포맷 → 테스트 → 빌드를 돌린다.
+# 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/31
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+# 같은 PR에 새 커밋이 올라오면 이전 실행은 취소한다
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: lint · format · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 비밀값 없이 mock 모드로 돌린다 (API 키 · DB 주소 불필요, YouTube 할당량 안 씀)
+    env:
+      USE_MOCK: 'true'
+      COMMENTS_USE_MOCK: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: 포맷 검사 (실패하면 npm run format 후 커밋)
+        run: npm run format:check
+
+      - name: 테스트
+        run: npm test
+
+      # next build가 TypeScript 검사도 같이 한다
+      - name: 빌드
+        run: npm run build
