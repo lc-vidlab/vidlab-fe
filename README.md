@@ -52,14 +52,15 @@ mock 모드에서 재현할 수 있는 상태(무한 스크롤, 결과 없음, �
 
 ### 스크립트
 
-| 명령                 | 설명                                              |
-| -------------------- | ------------------------------------------------- |
-| `npm run dev`        | 개발 서버                                         |
-| `npm run build`      | 프로덕션 빌드                                     |
-| `npm run lint`       | ESLint 검사                                       |
-| `npm run format`     | Prettier 포맷                                     |
-| `npm test`           | 단위 테스트 (Vitest). 네트워크 · API 키 없이 실행 |
-| `npm run test:watch` | 파일을 고칠 때마다 테스트 다시 실행               |
+| 명령                   | 설명                                              |
+| ---------------------- | ------------------------------------------------- |
+| `npm run dev`          | 개발 서버                                         |
+| `npm run build`        | 프로덕션 빌드                                     |
+| `npm run lint`         | ESLint 검사                                       |
+| `npm run format`       | Prettier 포맷                                     |
+| `npm run format:check` | 포맷 검사만 (CI에서 실행)                         |
+| `npm test`             | 단위 테스트 (Vitest). 네트워크 · API 키 없이 실행 |
+| `npm run test:watch`   | 파일을 고칠 때마다 테스트 다시 실행               |
 
 테스트 파일은 대상 파일 옆에 `*.test.ts`로 둡니다. (예: `src/lib/youtube/mock.test.ts`)
 
@@ -157,6 +158,8 @@ docs/
 - 브랜치는 `main` ← `develop` ← `feature/{영역}-{기능}` 순서로 머지합니다. PR마다 리뷰어 1명 이상 승인이 필요합니다
 - 공용 컴포넌트(VideoCard, Skeleton)를 고칠 때는 다른 담당자를 리뷰어로 추가합니다
 - 커밋 전에 `npm run lint`, `npm run format`을 실행합니다
+- PR을 올리면 GitHub Actions(CI)가 `lint` → `format:check` → `test` → `build`를 자동으로 돌립니다. 빨간 ✗가 뜨면 PR 아래 Checks에서 실패한 단계 로그를 보고 고친 뒤 다시 푸시합니다. CI가 통과한 PR만 병합합니다 ([#31](https://github.com/lc-vidlab/vidlab-fe/issues/31))
+- 개발 서버(`npm run dev`)에서 잘 돼도 빌드는 실패할 수 있습니다(예: [#29](https://github.com/lc-vidlab/vidlab-fe/issues/29)). 큰 변경은 PR 전에 `npm run build`를 한 번 돌려 봅니다
 - 색상은 테마 토큰 클래스(`bg-bg`, `bg-surface`, `text-text`, `text-sub`, `border-border`, `text-accent`)만 씁니다. 하드코딩한 색은 리뷰에서 반려합니다
 - `lib/youtube/types.ts`와 Route Handler 응답 형태는 W1 수요일까지 확정하고, 이후 각자 mock으로 개발합니다
 

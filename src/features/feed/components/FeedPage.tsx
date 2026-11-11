@@ -66,9 +66,8 @@ export default function FeedPage() {
   }, [query.data]);
   const categories = useMemo(() => {
     return (
-      query.data?.pages.find(
-        (page) => Array.isArray(page.categories) && page.categories.length > 0,
-      )?.categories ?? []
+      query.data?.pages.find((page) => Array.isArray(page.categories) && page.categories.length > 0)
+        ?.categories ?? []
     );
   }, [query.data]);
 
