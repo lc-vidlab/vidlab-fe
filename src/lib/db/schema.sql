@@ -32,6 +32,10 @@ create table if not exists public.comments (
   ip_hash       text        not null,
   -- 화면 표시용 작성 시각
   created_at    timestamptz not null default now(),
+  -- 삭제 비밀번호 시도 횟수 · 잠금 시각 (CMT-04, #21). 5번 틀리면 15분 잠그고 횟수를 0으로 되돌린다
+  -- 기존 테이블에는 migrations/2026-11-11-delete-lock.sql로 추가한다
+  delete_attempts     integer     not null default 0,
+  delete_locked_until timestamptz,
 
   constraint comments_video_id_format
     check (video_id ~ '^[A-Za-z0-9_-]{11}$'),
@@ -48,7 +52,9 @@ create table if not exists public.comments (
   constraint comments_content_format
     check (char_length(content) between 1 and 500 and content ~ '\S'),
   constraint comments_ip_hash_format
-    check (ip_hash ~ '^[0-9a-f]{64}$')
+    check (ip_hash ~ '^[0-9a-f]{64}$'),
+  constraint comments_delete_attempts_range
+    check (delete_attempts >= 0)
 );
 
 -- 영상별 최신순 목록 · 커서 페이지네이션 (where video_id = ? and id < ? order by id desc)

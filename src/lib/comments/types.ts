@@ -30,17 +30,29 @@ export type CommentInput = {
 /** POST /api/comments 요청 본문 */
 export type CreateCommentRequest = CommentInput & { videoId: string };
 
+/** DELETE /api/comments/{id} 요청 본문 */
+export type DeleteCommentRequest = { password: string };
+
 export type CommentField = keyof CommentInput;
 
 /** 칸별 에러 메시지 */
 export type CommentFieldErrors = Partial<Record<CommentField, string>>;
 
 /**
- * - BAD_REQUEST(400): 영상 id · 커서 · 요청 형식이 잘못됨
+ * - BAD_REQUEST(400): 영상 id · 댓글 id · 커서 · 요청 형식이 잘못됨
  * - VALIDATION_ERROR(400): 입력값이 규칙에 맞지 않음. fields에 칸별 메시지
+ * - WRONG_PASSWORD(403): 삭제 비밀번호가 틀림. message에 남은 횟수
+ * - NOT_FOUND(404): 없는 댓글 (이미 지운 댓글 포함)
+ * - TOO_MANY_ATTEMPTS(429): 비밀번호를 여러 번 틀려 삭제가 잠김. message에 기다릴 시간, Retry-After 헤더(초)
  * - SERVER_ERROR(500): DB 오류 등
  */
-export type CommentErrorCode = 'BAD_REQUEST' | 'VALIDATION_ERROR' | 'SERVER_ERROR';
+export type CommentErrorCode =
+  | 'BAD_REQUEST'
+  | 'VALIDATION_ERROR'
+  | 'WRONG_PASSWORD'
+  | 'NOT_FOUND'
+  | 'TOO_MANY_ATTEMPTS'
+  | 'SERVER_ERROR';
 
 /** 실패 응답 */
 export type CommentApiErrorBody = {

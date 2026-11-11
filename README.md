@@ -63,22 +63,31 @@ mock 모드에서 재현할 수 있는 상태(무한 스크롤, 결과 없음, �
 - 콘솔은 이주혁만 관리합니다. 다른 팀원은 DB 없이 개발할 수 있습니다.
 - 테이블 정의는 `src/lib/db/schema.sql`입니다. 처음 만들 때는 이 파일을 Supabase SQL Editor에서 실행합니다.
 - 이미 있는 테이블은 이 파일을 다시 실행해도 바뀌지 않습니다. 바꿀 때는 `alter table` 문을 따로 실행하고, `schema.sql`도 최종 모습으로 고쳐 둡니다.
+- 기존 테이블에 적용할 변경은 `src/lib/db/migrations/`에 날짜 순으로 둡니다. 여러 번 실행해도 안전하게 씁니다. (`2026-11-11-delete-lock.sql`: 삭제 잠금 컬럼, CMT-04)
 - `DATABASE_URL`은 Supabase 콘솔 **Connect → Direct → Transaction pooler** 주소(포트 6543)를 씁니다. 직접 연결(5432)은 배포 환경에서 연결 수가 바닥납니다. 비밀번호에 `@ # / ? :` 같은 문자가 있으면 퍼센트 인코딩해야 합니다.
 - `npm run db:check`: `.env.local`의 `DATABASE_URL`로 연결 · 테이블 · RLS · 입력 제약을 확인합니다. 데이터는 바꾸지 않습니다.
 - 무료 플랜은 7일 동안 요청이 없으면 일시정지됩니다. 시연 전에 콘솔에서 상태를 확인하세요.
 
 ### 댓글 API
 
-결정 근거는 [#19](https://github.com/lc-vidlab/vidlab-fe/issues/19)를 참고하세요. 타입은 `@/lib/comments/types`, 입력 규칙 · 검사는 `@/lib/comments/rules`에서 가져옵니다 (화면에서도 import 가능).
+결정 근거는 [#19](https://github.com/lc-vidlab/vidlab-fe/issues/19)(목록 · 작성), [#21](https://github.com/lc-vidlab/vidlab-fe/issues/21)(삭제)를 참고하세요. 타입은 `@/lib/comments/types`, 입력 규칙 · 검사는 `@/lib/comments/rules`에서 가져옵니다 (화면에서도 import 가능).
 
 | 요청                                                                   | 응답                                                                                                             |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `GET /api/comments?videoId=…&cursor=…`                                 | 200 `CommentPage` `{ items, nextCursor?, total }`. 최신순 20개. 다음 페이지는 `nextCursor`를 `cursor`로 넘깁니다 |
 | `POST /api/comments` (JSON `{ videoId, nickname, password, content }`) | 201 `CommentItem` `{ id, nickname, content, createdAt }`                                                         |
+| `DELETE /api/comments/{id}` (JSON `{ password }`)                      | 204 (본문 없음). 비밀번호를 5번 틀리면 그 댓글의 삭제가 15분 동안 잠깁니다                                       |
 
-- 실패하면 `{ error: { code, message, fields? } }`. `VALIDATION_ERROR`(400)는 `fields`에 닉네임 · 비밀번호 · 내용별 메시지가 있습니다. 그 밖에 `BAD_REQUEST`(400), `SERVER_ERROR`(500).
-- `POST`는 `Content-Type: application/json`만 받습니다.
-- mock 모드: `mock-vid-01`에 댓글 25개(2페이지)가 있고 다른 영상은 0개입니다. 내용을 `__error__`로 작성하면 500을 재현합니다. 작성한 댓글은 서버를 다시 켜면 사라집니다.
+- 실패하면 `{ error: { code, message, fields? } }`. 화면에는 `message`를 그대로 보여 주면 됩니다.
+  - `VALIDATION_ERROR`(400): `fields`에 닉네임 · 비밀번호 · 내용별 메시지
+  - `BAD_REQUEST`(400): 영상 id · 댓글 id · 커서 · 요청 형식 오류
+  - `WRONG_PASSWORD`(403): 삭제 비밀번호가 틀림. 메시지에 남은 횟수
+  - `NOT_FOUND`(404): 없거나 이미 지운 댓글
+  - `TOO_MANY_ATTEMPTS`(429): 삭제가 잠김. 메시지에 기다릴 시간, `Retry-After` 헤더(초)
+  - `SERVER_ERROR`(500)
+- `POST` · `DELETE`는 `Content-Type: application/json`만 받습니다.
+- 잠금 기준(5번 · 15분)은 `COMMENT_DELETE_RULES`(`@/lib/comments/rules`)에 있습니다.
+- mock 모드: `mock-vid-01`에 댓글 25개(2페이지)가 있고 다른 영상은 0개입니다. 내용을 `__error__`로 작성하면 500을 재현합니다. mock 댓글의 비밀번호는 모두 `1234`입니다. 작성 · 삭제 · 잠금은 서버를 다시 켜면 처음 상태로 돌아갑니다.
 - 서버 코드는 `@/lib/comments/service`만 import합니다. (`postgres.ts` · `mock.ts` 직접 import는 ESLint가 막습니다)
 - SQL 테스트: `src/lib/comments/postgres.test.ts` 맨 위 안내대로 로컬 Postgres를 띄우고 `TEST_DATABASE_URL`을 넣으면 실행됩니다. 평소 `npm test`에서는 건너뜁니다.
 

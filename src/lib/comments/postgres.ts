@@ -10,7 +10,7 @@ import 'server-only';
 import { getDb } from '@/lib/db/client';
 
 import { CommentApiError, validationError } from './errors';
-import type { CommentStore, NewCommentRecord } from './store';
+import type { CommentStore, DeleteAttempt, NewCommentRecord } from './store';
 import type { CommentItem } from './types';
 
 type CommentRow = {
@@ -98,6 +98,55 @@ export const postgresStore: CommentStore = {
         returning id, nickname, content, created_at
       `;
       return toItem(row);
+    });
+  },
+
+  reserveDeleteAttempt(id, maxAttempts) {
+    return withDbError('삭제 시도', async (): Promise<DeleteAttempt> => {
+      const sql = getDb();
+      // 한 문장의 update라 동시에 와도 maxAttempts개까지만 통과한다 (#21)
+      const [reserved] = await sql<{ password_hash: string; delete_attempts: number }[]>`
+        update comments
+        set delete_attempts = delete_attempts + 1
+        where id = ${id}
+          and delete_attempts < ${maxAttempts}
+          and (delete_locked_until is null or delete_locked_until <= now())
+        returning password_hash, delete_attempts
+      `;
+      if (reserved) {
+        return {
+          status: 'ready',
+          passwordHash: reserved.password_hash,
+          attempts: reserved.delete_attempts,
+        };
+      }
+
+      const [row] = await sql<{ locked_until: Date | null }[]>`
+        select case when delete_locked_until > now() then delete_locked_until end as locked_until
+        from comments
+        where id = ${id}
+      `;
+      return row ? { status: 'locked', lockedUntil: row.locked_until } : { status: 'not_found' };
+    });
+  },
+
+  lockDelete(id, lockMinutes) {
+    return withDbError('삭제 잠금', async () => {
+      const sql = getDb();
+      await sql`
+        update comments
+        set delete_attempts = 0,
+            delete_locked_until = now() + make_interval(mins => ${lockMinutes})
+        where id = ${id}
+      `;
+    });
+  },
+
+  remove(id) {
+    return withDbError('삭제', async () => {
+      const sql = getDb();
+      const result = await sql`delete from comments where id = ${id}`;
+      return result.count > 0;
     });
   },
 };

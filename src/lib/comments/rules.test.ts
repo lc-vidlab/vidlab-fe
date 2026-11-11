@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { countChars, validateCommentInput } from './rules';
+import { countChars, validateCommentInput, validateDeletePassword } from './rules';
 import type { CommentInput } from './types';
 
 const VALID: CommentInput = { nickname: '영상러버', password: '1234', content: '좋은 영상이네요' };
@@ -200,5 +200,18 @@ describe('validateCommentInput', () => {
       'password',
       'content',
     ]);
+  });
+});
+
+describe('validateDeletePassword', () => {
+  it('작성 때와 같이 NFC로 맞추고 앞뒤 공백은 그대로 둔다', () => {
+    expect(validateDeletePassword(` ${NFD_GA}12 `)).toEqual({ ok: true, value: ' 가12 ' });
+  });
+
+  it('규칙에 안 맞으면 작성 때와 같은 메시지', () => {
+    expect(validateDeletePassword('123')).toEqual({
+      ok: false,
+      error: '비밀번호는 4~20자로 입력해 주세요.',
+    });
   });
 });

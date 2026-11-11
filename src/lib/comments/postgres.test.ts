@@ -64,4 +64,58 @@ describe.skipIf(!url)('postgresStore (TEST_DATABASE_URL)', () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain(RECORD.passwordHash);
     warn.mockRestore();
   });
+
+  describe('삭제 (#21)', () => {
+    it('시도를 예약하면 횟수가 오르고 해시를 돌려준다', async () => {
+      const { id } = await postgresStore.insert(RECORD);
+      expect(await postgresStore.reserveDeleteAttempt(id, 5)).toEqual({
+        status: 'ready',
+        passwordHash: RECORD.passwordHash,
+        attempts: 1,
+      });
+      expect(await postgresStore.reserveDeleteAttempt(id, 5)).toMatchObject({ attempts: 2 });
+    });
+
+    it('동시에 와도 maxAttempts개만 예약된다', async () => {
+      const { id } = await postgresStore.insert(RECORD);
+      const results = await Promise.all(
+        Array.from({ length: 10 }, () => postgresStore.reserveDeleteAttempt(id, 5)),
+      );
+      const ready = results.filter((r) => r.status === 'ready');
+      expect(ready).toHaveLength(5);
+      expect(ready.map((r) => (r.status === 'ready' ? r.attempts : 0)).sort()).toEqual([
+        1, 2, 3, 4, 5,
+      ]);
+      // 횟수가 꽉 찼지만 아직 잠그지 않음 → 잠그는 중
+      expect(results.filter((r) => r.status === 'locked')).toEqual(
+        Array(5).fill({ status: 'locked', lockedUntil: null }),
+      );
+    });
+
+    it('잠그면 lockedUntil을 돌려주고, 잠금이 풀리면 횟수를 처음부터 센다', async () => {
+      const { id } = await postgresStore.insert(RECORD);
+      await postgresStore.reserveDeleteAttempt(id, 5);
+      await postgresStore.lockDelete(id, 15);
+
+      const locked = await postgresStore.reserveDeleteAttempt(id, 5);
+      expect(locked.status).toBe('locked');
+      const until = locked.status === 'locked' ? locked.lockedUntil : null;
+      expect(until).toBeInstanceOf(Date);
+      expect(until!.getTime() - Date.now()).toBeGreaterThan(14 * 60_000);
+
+      // 잠금 시각을 과거로 돌려 풀린 상태를 만든다
+      await getDb()`update comments set delete_locked_until = now() - interval '1 second' where id = ${id}`;
+      expect(await postgresStore.reserveDeleteAttempt(id, 5)).toMatchObject({
+        status: 'ready',
+        attempts: 1,
+      });
+    });
+
+    it('지우면 true, 다시 지우면 false, 없는 댓글은 not_found', async () => {
+      const { id } = await postgresStore.insert(RECORD);
+      expect(await postgresStore.remove(id)).toBe(true);
+      expect(await postgresStore.remove(id)).toBe(false);
+      expect(await postgresStore.reserveDeleteAttempt(id, 5)).toEqual({ status: 'not_found' });
+    });
+  });
 });

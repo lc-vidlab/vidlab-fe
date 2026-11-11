@@ -15,6 +15,17 @@ export type NewCommentRecord = {
   ipHash: string;
 };
 
+/**
+ * 삭제 시도 예약 결과.
+ * - ready: 시도 1회를 차지했다. attempts는 이번 시도를 포함한 실패 · 시도 횟수
+ * - locked: 잠겨 있다. lockedUntil이 null이면 다른 요청이 막 잠그는 중 (횟수가 꽉 참)
+ * - not_found: 댓글이 없다
+ */
+export type DeleteAttempt =
+  | { status: 'ready'; passwordHash: string; attempts: number }
+  | { status: 'locked'; lockedUntil: Date | null }
+  | { status: 'not_found' };
+
 export type CommentStore = {
   /** 영상의 댓글을 최신순(id 큰 순)으로 limit개. beforeId가 있으면 그보다 작은 id만 */
   findPage(videoId: string, options: { beforeId?: string; limit: number }): Promise<CommentItem[]>;
@@ -22,4 +33,13 @@ export type CommentStore = {
   count(videoId: string): Promise<number>;
   /** 저장하고 저장된 댓글을 돌려준다 */
   insert(record: NewCommentRecord): Promise<CommentItem>;
+  /**
+   * 잠겨 있지 않고 시도 횟수가 maxAttempts보다 적으면 횟수를 1 올리고 비밀번호 해시를 돌려준다.
+   * 확인과 증가를 한 번에 해서, 동시에 여러 요청이 와도 maxAttempts번까지만 통과한다.
+   */
+  reserveDeleteAttempt(id: string, maxAttempts: number): Promise<DeleteAttempt>;
+  /** 삭제를 lockMinutes분 동안 잠그고 시도 횟수를 0으로 되돌린다 */
+  lockDelete(id: string, lockMinutes: number): Promise<void>;
+  /** 지우고, 지운 행이 있었는지 돌려준다 */
+  remove(id: string): Promise<boolean>;
 };
