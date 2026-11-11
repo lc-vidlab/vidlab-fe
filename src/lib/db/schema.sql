@@ -32,7 +32,9 @@ create table if not exists public.comments (
   ip_hash       text        not null,
   -- 화면 표시용 작성 시각
   created_at    timestamptz not null default now(),
-  -- 삭제 비밀번호 시도 횟수 · 잠금 시각 (CMT-04, #21). 5번 틀리면 15분 잠그고 횟수를 0으로 되돌린다
+  -- 삭제 비밀번호 시도 횟수 · 잠금 시각 (CMT-04, #21)
+  -- 시도 횟수는 누적한다. 5번째 시도에서 15분 잠그고, 잠금이 풀린 뒤 다음 시도에서 1부터 다시 센다
+  -- (잠긴 동안 delete_attempts는 5로 남는다. 바꾸는 곳은 comments/postgres.ts의 reserveDeleteAttempt 하나뿐)
   -- 기존 테이블에는 migrations/2026-11-11-delete-lock.sql로 추가한다
   delete_attempts     integer     not null default 0,
   delete_locked_until timestamptz,
