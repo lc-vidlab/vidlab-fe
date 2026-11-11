@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { Header } from '@/components/layout/Header';
 import './globals.css';
 import { Providers } from './providers';
 
@@ -13,7 +14,10 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     // next-themes가 그리기 전에 <html>에 테마 class를 붙이므로 서버 HTML과 달라진다. 그 경고만 끈다
     <html lang="ko" className="h-full antialiased" suppressHydrationWarning>
       <body className="flex min-h-full flex-col">
-        <Providers>{children}</Providers>
+        <Providers>
+          <Header />
+          {children}
+        </Providers>
       </body>
     </html>
   );

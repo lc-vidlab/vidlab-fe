@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import SearchBar from '@/features/search/components/SearchBar';
 import SearchFilterBar from '@/features/search/components/SearchFilterBar';
 import SearchResultList from '@/features/search/components/SearchResultList';
 import { parseFilters } from '@/features/search/lib/filters';
@@ -41,10 +40,6 @@ async function SearchResults({
 export default function ResultsPage({ searchParams }: PageProps<'/results'>) {
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
-      {/* TODO(민진): SET-03 공통 헤더의 검색창 슬롯이 생기면 그쪽으로 옮기고 여기서는 제거 */}
-      <div className="mb-6 flex justify-center">
-        <SearchBar />
-      </div>
       <Suspense fallback={<p className="text-sub">불러오는 중…</p>}>
         <SearchResults searchParams={searchParams} />
       </Suspense>
