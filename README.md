@@ -150,7 +150,7 @@ lc-vidlab/vidlab-fe (비공개, 작업 저장소)
 ### 복제 설정 (lc-vidlab/vidlab-fe → Settings → Secrets and variables → Actions)
 
 - 변수 `MIRROR_REPO`: 개인 저장소 `계정/저장소`
-- 비밀값 `MIRROR_TOKEN`: 개인 저장소 하나에만 **Contents: Read and write** 권한을 준 fine-grained 토큰
+- 비밀값 `MIRROR_TOKEN`: 개인 저장소 하나에만 **Contents: Read and write**, **Workflows: Read and write** 권한을 준 fine-grained 토큰 (복제하는 코드에 `.github/workflows`가 있어 Workflows 권한이 없으면 push가 거부됩니다). 만료일이 지나면 복제가 멈추니 갱신합니다
 - 둘 중 하나가 없으면 복제를 건너뜁니다. Actions 탭의 **Mirror main → Run workflow**로 직접 실행할 수도 있습니다.
 
 ### 출시 순서
