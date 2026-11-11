@@ -60,8 +60,12 @@ export function badRequest(message: string): CommentApiError {
   return new CommentApiError('BAD_REQUEST', message);
 }
 
-export function validationError(fields?: CommentFieldErrors): CommentApiError {
-  return new CommentApiError('VALIDATION_ERROR', undefined, { fields });
+/**
+ * @param message 생략하면 '입력값을 확인해 주세요.'. 칸이 하나뿐인 요청(삭제)은 그 칸의 메시지를 넣어
+ *   화면이 message만 보여 줘도 이유가 보이게 한다
+ */
+export function validationError(fields?: CommentFieldErrors, message?: string): CommentApiError {
+  return new CommentApiError('VALIDATION_ERROR', message, { fields });
 }
 
 export function notFound(): CommentApiError {

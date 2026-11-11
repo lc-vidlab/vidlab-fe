@@ -93,7 +93,7 @@ export async function deleteComment(id: string, request: DeleteCommentRequest): 
   if (!isCommentId(id)) throw badRequest('잘못된 댓글 id입니다.');
   // 저장할 때 통과한 규칙에 안 맞으면 맞을 수 없는 비밀번호라 횟수에 넣지 않는다
   const password = validateDeletePassword(request.password);
-  if (!password.ok) throw validationError({ password: password.error });
+  if (!password.ok) throw validationError({ password: password.error }, password.error);
 
   const comments = store();
   // 비교하기 전에 시도 1회를 먼저 차지한다. 동시 요청으로 횟수 제한을 넘지 못하게 한다

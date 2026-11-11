@@ -89,6 +89,8 @@ describe('DELETE /api/comments/{id}', () => {
     const { id } = await newComment();
     const error = await expectError(await del(id, { password: '' }), 'VALIDATION_ERROR', 400);
     expect(error.fields).toEqual({ password: '비밀번호는 4~20자로 입력해 주세요.' });
+    // 화면은 message만 보여 줘도 이유가 보인다
+    expect(error.message).toBe('비밀번호는 4~20자로 입력해 주세요.');
   });
 
   it.each([
