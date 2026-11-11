@@ -9,9 +9,8 @@ export function formatViewCountFull(count: number): string | null {
   return `조회수 ${count.toLocaleString('ko-KR')}회`;
 }
 
-/** 1820000 → 구독자 182만명, 98400 → 구독자 9.8만명. 숨긴 채널(undefined)이면 null */
-export function formatSubscriberCount(count: number | undefined): string | null {
-  if (count === undefined) return null;
+/** 1820000 → 182만, 98400 → 9.8만, 1200 → 1.2천, 950 → 950 */
+function compactNumber(count: number): string {
   const units: [number, string][] = [
     [1e8, '억'],
     [1e4, '만'],
@@ -22,10 +21,31 @@ export function formatSubscriberCount(count: number | undefined): string | null 
       const value = count / size;
       const text =
         value >= 10 ? Math.floor(value).toString() : (Math.floor(value * 10) / 10).toString();
-      return `구독자 ${text}${unit}명`;
+      return `${text}${unit}`;
     }
   }
-  return `구독자 ${count}명`;
+  return String(count);
+}
+
+/** 1820000 → 구독자 182만명. 숨긴 채널(undefined)이면 null */
+export function formatSubscriberCount(count: number | undefined): string | null {
+  if (count === undefined) return null;
+  return `구독자 ${compactNumber(count)}명`;
+}
+
+/** 12345 → 조회수 1.2만회 (카드용 짧은 표기). 0(조회수 숨김)이면 null */
+export function formatViewCountShort(count: number): string | null {
+  if (count <= 0) return null;
+  return `조회수 ${compactNumber(count)}회`;
+}
+
+/** 초 → 3725 = 1:02:05, 1122 = 18:42, 45 = 0:45. 0(라이브 등)이면 null */
+export function formatDuration(totalSec: number): string | null {
+  if (totalSec <= 0) return null;
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const ss = String(totalSec % 60).padStart(2, '0');
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${ss}` : `${minutes}:${ss}`;
 }
 
 /** ISO 날짜 → 3일 전, 2개월 전 */

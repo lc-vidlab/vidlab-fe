@@ -9,6 +9,7 @@ import {
   PlayerSkeleton,
   RelatedSkeleton,
 } from '@/features/watch/components/WatchSkeletons';
+import { RelatedVideos } from '@/features/watch/components/RelatedVideos';
 import { VideoInfo, VideoInfoError } from '@/features/watch/components/VideoInfo';
 import { loadVideo } from '@/features/watch/server/load-video';
 import { isVideoId } from '@/lib/youtube/video-id';
@@ -37,6 +38,15 @@ async function WatchContent({ id }: { id: string }) {
     'video' in result ? <VideoInfo video={result.video} /> : <VideoInfoError code={result.error} />;
   const title = 'video' in result ? result.video.title : undefined;
 
+  // 관련 영상은 영상의 카테고리가 있어야 찾을 수 있다. 따로 Suspense로 감싸서
+  // 관련 영상 조회가 늦어도 플레이어 · 정보는 먼저 보이게 한다
+  const related =
+    'video' in result ? (
+      <Suspense fallback={<RelatedSkeleton />}>
+        <RelatedVideos categoryId={result.video.categoryId} excludeId={id} />
+      </Suspense>
+    ) : null;
+
   return (
     <WatchLayout
       player={<VideoPlayer key={id} videoId={id} title={title} />}
@@ -49,8 +59,7 @@ async function WatchContent({ id }: { id: string }) {
           <CommentsSkeleton />
         </div>
       }
-      // TODO(WATCH-05): 같은 카테고리 인기 영상
-      related={<RelatedSkeleton />}
+      related={related}
     />
   );
 }
