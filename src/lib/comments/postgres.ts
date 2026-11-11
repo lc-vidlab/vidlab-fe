@@ -4,7 +4,8 @@ import 'server-only';
 // 직접 import하지 말고 service.ts를 쓴다.
 //
 // 쿼리 규칙 (src/lib/db/client.ts)
-// - 공개 컬럼만 고른다. password_hash · ip_hash는 select하지 않는다
+// - 응답에 실릴 쿼리는 공개 컬럼만 고른다. password_hash · ip_hash는 응답 쿼리에 넣지 않는다
+//   (예외: reserveDeleteAttempt는 서비스 안에서 비밀번호를 비교하려고 password_hash를 돌려준다. 응답에는 싣지 않는다)
 // - 값은 sql`... ${value}` 템플릿으로만 넘긴다
 
 import { getDb } from '@/lib/db/client';
@@ -101,44 +102,46 @@ export const postgresStore: CommentStore = {
     });
   },
 
-  reserveDeleteAttempt(id, maxAttempts) {
+  reserveDeleteAttempt(id, { maxAttempts, lockMinutes }) {
     return withDbError('삭제 시도', async (): Promise<DeleteAttempt> => {
       const sql = getDb();
-      // 한 문장의 update라 동시에 와도 maxAttempts개까지만 통과한다 (#21)
-      const [reserved] = await sql<{ password_hash: string; delete_attempts: number }[]>`
+      // 한 문장의 update라 동시에 와도 행 잠금으로 하나씩 처리된다. 잠금도 여기서 같이 건다 (#21)
+      // 남은 초는 DB 시계(now())로 계산해 앱 서버와의 시계 차이를 타지 않는다
+      const [reserved] = await sql<
+        { password_hash: string; delete_attempts: number; locked_for_seconds: number | null }[]
+      >`
         update comments
-        set delete_attempts = delete_attempts + 1
+        set delete_attempts = case
+              when delete_locked_until <= now() then 1
+              else delete_attempts + 1
+            end,
+            delete_locked_until = case
+              when (case when delete_locked_until <= now() then 1 else delete_attempts + 1 end)
+                   >= ${maxAttempts}
+              then now() + make_interval(mins => ${lockMinutes})
+            end
         where id = ${id}
-          and delete_attempts < ${maxAttempts}
           and (delete_locked_until is null or delete_locked_until <= now())
-        returning password_hash, delete_attempts
+        returning password_hash, delete_attempts,
+          ceil(extract(epoch from delete_locked_until - now()))::int as locked_for_seconds
       `;
       if (reserved) {
         return {
           status: 'ready',
           passwordHash: reserved.password_hash,
           attempts: reserved.delete_attempts,
+          lockedForSeconds: reserved.locked_for_seconds,
         };
       }
 
-      const [row] = await sql<{ locked_until: Date | null }[]>`
-        select case when delete_locked_until > now() then delete_locked_until end as locked_until
+      const [row] = await sql<{ retry_after_seconds: number }[]>`
+        select ceil(extract(epoch from delete_locked_until - now()))::int as retry_after_seconds
         from comments
         where id = ${id}
       `;
-      return row ? { status: 'locked', lockedUntil: row.locked_until } : { status: 'not_found' };
-    });
-  },
-
-  lockDelete(id, lockMinutes) {
-    return withDbError('삭제 잠금', async () => {
-      const sql = getDb();
-      await sql`
-        update comments
-        set delete_attempts = 0,
-            delete_locked_until = now() + make_interval(mins => ${lockMinutes})
-        where id = ${id}
-      `;
+      return row
+        ? { status: 'locked', retryAfterSeconds: row.retry_after_seconds }
+        : { status: 'not_found' };
     });
   },
 

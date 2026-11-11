@@ -93,31 +93,34 @@ export const mockStore: CommentStore = {
     return toItem(row);
   },
 
-  // 아래 세 메서드는 postgres.ts와 같은 규칙. 확인과 증가 사이에 await가 없어 동시 요청에도 안전하다
-  async reserveDeleteAttempt(id, maxAttempts): Promise<DeleteAttempt> {
+  // postgres.ts와 같은 규칙. 확인 · 증가 · 잠금 사이에 await가 없어 동시 요청에도 안전하다
+  async reserveDeleteAttempt(id, { maxAttempts, lockMinutes }): Promise<DeleteAttempt> {
     await mockDelay();
     const row = findRow(id);
     if (!row) return { status: 'not_found' };
-    if (row.deleteLockedUntil > Date.now()) {
-      return { status: 'locked', lockedUntil: new Date(row.deleteLockedUntil) };
+    const now = Date.now();
+    if (row.deleteLockedUntil > now) {
+      return {
+        status: 'locked',
+        retryAfterSeconds: Math.ceil((row.deleteLockedUntil - now) / 1000),
+      };
     }
-    if (row.deleteAttempts >= maxAttempts) return { status: 'locked', lockedUntil: null };
-    row.deleteAttempts += 1;
-    return { status: 'ready', passwordHash: row.passwordHash, attempts: row.deleteAttempts };
-  },
-
-  async lockDelete(id, lockMinutes) {
-    await mockDelay();
-    const row = findRow(id);
-    if (!row) return;
-    row.deleteAttempts = 0;
-    row.deleteLockedUntil = Date.now() + lockMinutes * 60_000;
+    // 잠금이 풀렸으면 1부터 다시 센다
+    row.deleteAttempts = row.deleteLockedUntil ? 1 : row.deleteAttempts + 1;
+    const locks = row.deleteAttempts >= maxAttempts;
+    row.deleteLockedUntil = locks ? now + lockMinutes * 60_000 : 0;
+    return {
+      status: 'ready',
+      passwordHash: row.passwordHash,
+      attempts: row.deleteAttempts,
+      lockedForSeconds: locks ? lockMinutes * 60 : null,
+    };
   },
 
   async remove(id) {
     await mockDelay();
     const store = db();
-    const index = store.rows.findIndex((row) => row.id === Number(id));
+    const index = store.rows.findIndex((row) => String(row.id) === id);
     if (index === -1) return false;
     store.rows.splice(index, 1);
     return true;
@@ -125,5 +128,6 @@ export const mockStore: CommentStore = {
 };
 
 function findRow(id: string): MockRow | undefined {
-  return db().rows.find((row) => row.id === Number(id));
+  // Number(id)는 큰 수에서 정밀도를 잃으므로 문자열로 비교한다 (Postgres와 같게)
+  return db().rows.find((row) => String(row.id) === id);
 }

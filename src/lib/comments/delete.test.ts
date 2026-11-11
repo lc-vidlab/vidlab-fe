@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CommentApiError } from './errors';
-import { createComment, deleteComment, listComments } from './service';
+import { verifyPassword } from './hash';
+import { mockStore } from './mock';
 import { COMMENT_DELETE_RULES } from './rules';
+import { createComment, deleteComment, listComments } from './service';
+
+// bcrypt 비교 횟수를 세려고 verifyPassword만 감싼다 (동작은 그대로)
+vi.mock('./hash', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./hash')>();
+  return { ...actual, verifyPassword: vi.fn(actual.verifyPassword) };
+});
 
 // 댓글 삭제(deleteComment)를 mock 저장소로 확인한다. 실제 DB SQL은 postgres.test.ts에서 본다.
 // 결정 근거: https://github.com/lc-vidlab/vidlab-fe/issues/21
@@ -39,6 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+  vi.mocked(verifyPassword).mockClear();
 });
 
 describe('deleteComment', () => {
@@ -89,6 +98,7 @@ describe('deleteComment', () => {
 
   it('동시에 여러 번 틀려도 비교는 5번까지만 한다', async () => {
     const { id } = await newComment();
+    vi.mocked(verifyPassword).mockClear();
     const errors = await Promise.all(
       Array.from({ length: 12 }, () => errorOf(deleteComment(id, { password: 'wrong' }))),
     );
@@ -97,6 +107,34 @@ describe('deleteComment', () => {
     expect(codes.filter((code) => code === 'TOO_MANY_ATTEMPTS')).toHaveLength(
       12 - (maxAttempts - 1),
     );
+    expect(verifyPassword).toHaveBeenCalledTimes(maxAttempts);
+  });
+
+  it('5번째에 맞는 비밀번호를 넣으면 지워진다', async () => {
+    const { id, videoId } = await newComment();
+    for (let i = 1; i < maxAttempts; i++) await errorOf(deleteComment(id, { password: 'wrong' }));
+    await deleteComment(id, { password: PASSWORD });
+    expect((await listComments(videoId)).total).toBe(0);
+  });
+
+  it('비교 뒤에 요청이 끊겨도 갇히지 않는다 (예약만 5번 하고 결과를 못 낸 경우)', async () => {
+    const { id } = await newComment();
+    for (let i = 0; i < maxAttempts; i++) {
+      await mockStore.reserveDeleteAttempt(id, COMMENT_DELETE_RULES);
+    }
+    // 5번째 예약에서 이미 잠겼다
+    expect((await errorOf(deleteComment(id, { password: PASSWORD }))).code).toBe(
+      'TOO_MANY_ATTEMPTS',
+    );
+    // 잠금이 풀리면 지울 수 있다
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + lockMinutes * 60_000 + 1);
+    await deleteComment(id, { password: PASSWORD });
+  });
+
+  it('비밀번호가 맞았는데 그사이 지워졌으면 NOT_FOUND', async () => {
+    const { id } = await newComment();
+    vi.spyOn(mockStore, 'remove').mockResolvedValueOnce(false);
+    expect((await errorOf(deleteComment(id, { password: PASSWORD }))).code).toBe('NOT_FOUND');
   });
 
   it('없는 댓글은 NOT_FOUND', async () => {

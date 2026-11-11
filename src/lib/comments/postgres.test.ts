@@ -66,56 +66,65 @@ describe.skipIf(!url)('postgresStore (TEST_DATABASE_URL)', () => {
   });
 
   describe('삭제 (#21)', () => {
+    const RULE = { maxAttempts: 5, lockMinutes: 15 };
+
     it('시도를 예약하면 횟수가 오르고 해시를 돌려준다', async () => {
       const { id } = await postgresStore.insert(RECORD);
-      expect(await postgresStore.reserveDeleteAttempt(id, 5)).toEqual({
+      expect(await postgresStore.reserveDeleteAttempt(id, RULE)).toEqual({
         status: 'ready',
         passwordHash: RECORD.passwordHash,
         attempts: 1,
+        lockedForSeconds: null,
       });
-      expect(await postgresStore.reserveDeleteAttempt(id, 5)).toMatchObject({ attempts: 2 });
+      expect(await postgresStore.reserveDeleteAttempt(id, RULE)).toMatchObject({ attempts: 2 });
     });
 
-    it('동시에 와도 maxAttempts개만 예약된다', async () => {
+    it('동시에 와도 maxAttempts개만 예약되고, 마지막 예약이 바로 잠근다', async () => {
       const { id } = await postgresStore.insert(RECORD);
       const results = await Promise.all(
-        Array.from({ length: 10 }, () => postgresStore.reserveDeleteAttempt(id, 5)),
+        Array.from({ length: 10 }, () => postgresStore.reserveDeleteAttempt(id, RULE)),
       );
-      const ready = results.filter((r) => r.status === 'ready');
-      expect(ready).toHaveLength(5);
-      expect(ready.map((r) => (r.status === 'ready' ? r.attempts : 0)).sort()).toEqual([
-        1, 2, 3, 4, 5,
-      ]);
-      // 횟수가 꽉 찼지만 아직 잠그지 않음 → 잠그는 중
-      expect(results.filter((r) => r.status === 'locked')).toEqual(
-        Array(5).fill({ status: 'locked', lockedUntil: null }),
-      );
+      const ready = results.flatMap((r) => (r.status === 'ready' ? [r] : []));
+      expect(ready.map((r) => r.attempts).sort()).toEqual([1, 2, 3, 4, 5]);
+      expect(ready.find((r) => r.attempts === 5)?.lockedForSeconds).toBe(900);
+      expect(ready.filter((r) => r.lockedForSeconds !== null)).toHaveLength(1);
+
+      // 나머지는 모두 실제 잠금 시간을 받는다 ("잠그는 중" 같은 애매한 상태가 없다)
+      const locked = results.flatMap((r) => (r.status === 'locked' ? [r] : []));
+      expect(locked).toHaveLength(5);
+      for (const r of locked) {
+        expect(r.retryAfterSeconds).toBeGreaterThan(890);
+        expect(r.retryAfterSeconds).toBeLessThanOrEqual(900);
+      }
     });
 
-    it('잠그면 lockedUntil을 돌려주고, 잠금이 풀리면 횟수를 처음부터 센다', async () => {
+    it('잠금이 풀리면 1부터 다시 센다', async () => {
       const { id } = await postgresStore.insert(RECORD);
-      await postgresStore.reserveDeleteAttempt(id, 5);
-      await postgresStore.lockDelete(id, 15);
-
-      const locked = await postgresStore.reserveDeleteAttempt(id, 5);
-      expect(locked.status).toBe('locked');
-      const until = locked.status === 'locked' ? locked.lockedUntil : null;
-      expect(until).toBeInstanceOf(Date);
-      expect(until!.getTime() - Date.now()).toBeGreaterThan(14 * 60_000);
-
+      for (let i = 0; i < RULE.maxAttempts; i++) await postgresStore.reserveDeleteAttempt(id, RULE);
       // 잠금 시각을 과거로 돌려 풀린 상태를 만든다
       await getDb()`update comments set delete_locked_until = now() - interval '1 second' where id = ${id}`;
-      expect(await postgresStore.reserveDeleteAttempt(id, 5)).toMatchObject({
+      expect(await postgresStore.reserveDeleteAttempt(id, RULE)).toMatchObject({
         status: 'ready',
         attempts: 1,
+        lockedForSeconds: null,
       });
+      const [row] = await getDb()`select delete_locked_until from comments where id = ${id}`;
+      expect(row.delete_locked_until).toBeNull();
+    });
+
+    it('기준을 낮춰도 횟수가 넘친 행이 갇히지 않는다 (다음 예약에서 잠근다)', async () => {
+      const { id } = await postgresStore.insert(RECORD);
+      for (let i = 0; i < 4; i++) await postgresStore.reserveDeleteAttempt(id, RULE);
+      expect(
+        await postgresStore.reserveDeleteAttempt(id, { maxAttempts: 3, lockMinutes: 15 }),
+      ).toMatchObject({ status: 'ready', attempts: 5, lockedForSeconds: 900 });
     });
 
     it('지우면 true, 다시 지우면 false, 없는 댓글은 not_found', async () => {
       const { id } = await postgresStore.insert(RECORD);
       expect(await postgresStore.remove(id)).toBe(true);
       expect(await postgresStore.remove(id)).toBe(false);
-      expect(await postgresStore.reserveDeleteAttempt(id, 5)).toEqual({ status: 'not_found' });
+      expect(await postgresStore.reserveDeleteAttempt(id, RULE)).toEqual({ status: 'not_found' });
     });
   });
 });

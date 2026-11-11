@@ -95,26 +95,18 @@ export async function deleteComment(id: string, request: DeleteCommentRequest): 
   const password = validateDeletePassword(request.password);
   if (!password.ok) throw validationError({ password: password.error });
 
-  const { maxAttempts, lockMinutes } = COMMENT_DELETE_RULES;
   const comments = store();
   // 비교하기 전에 시도 1회를 먼저 차지한다. 동시 요청으로 횟수 제한을 넘지 못하게 한다
-  const attempt = await comments.reserveDeleteAttempt(id, maxAttempts);
+  const attempt = await comments.reserveDeleteAttempt(id, COMMENT_DELETE_RULES);
   if (attempt.status === 'not_found') throw notFound();
-  if (attempt.status === 'locked') {
-    // lockedUntil이 없으면 다른 요청이 막 잠그는 중이라 잠금 시간 전체를 기다리게 한다
-    const until = attempt.lockedUntil?.getTime() ?? Date.now() + lockMinutes * 60_000;
-    throw tooManyAttempts((until - Date.now()) / 1000);
-  }
+  if (attempt.status === 'locked') throw tooManyAttempts(attempt.retryAfterSeconds);
 
   if (await verifyPassword(password.value, attempt.passwordHash)) {
     // 그사이 다른 요청이 먼저 지웠으면 없는 댓글
     if (!(await comments.remove(id))) throw notFound();
     return;
   }
-
-  if (attempt.attempts >= maxAttempts) {
-    await comments.lockDelete(id, lockMinutes);
-    throw tooManyAttempts(lockMinutes * 60);
-  }
-  throw wrongPassword(maxAttempts - attempt.attempts);
+  // 이번 시도로 잠겼으면 429, 아니면 남은 횟수와 함께 403
+  if (attempt.lockedForSeconds !== null) throw tooManyAttempts(attempt.lockedForSeconds);
+  throw wrongPassword(COMMENT_DELETE_RULES.maxAttempts - attempt.attempts);
 }

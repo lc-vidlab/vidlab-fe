@@ -15,15 +15,19 @@ export type NewCommentRecord = {
   ipHash: string;
 };
 
+/** 삭제 비밀번호 잠금 기준 (COMMENT_DELETE_RULES) */
+export type DeleteLockRule = { maxAttempts: number; lockMinutes: number };
+
 /**
  * 삭제 시도 예약 결과.
- * - ready: 시도 1회를 차지했다. attempts는 이번 시도를 포함한 실패 · 시도 횟수
- * - locked: 잠겨 있다. lockedUntil이 null이면 다른 요청이 막 잠그는 중 (횟수가 꽉 참)
+ * - ready: 시도 1회를 차지했다. attempts는 이번 시도를 포함한 횟수.
+ *   이번 시도로 maxAttempts에 닿아 잠겼으면 lockedForSeconds에 잠금 시간(초), 아니면 null
+ * - locked: 잠겨 있다. retryAfterSeconds 뒤에 풀린다
  * - not_found: 댓글이 없다
  */
 export type DeleteAttempt =
-  | { status: 'ready'; passwordHash: string; attempts: number }
-  | { status: 'locked'; lockedUntil: Date | null }
+  | { status: 'ready'; passwordHash: string; attempts: number; lockedForSeconds: number | null }
+  | { status: 'locked'; retryAfterSeconds: number }
   | { status: 'not_found' };
 
 export type CommentStore = {
@@ -34,12 +38,11 @@ export type CommentStore = {
   /** 저장하고 저장된 댓글을 돌려준다 */
   insert(record: NewCommentRecord): Promise<CommentItem>;
   /**
-   * 잠겨 있지 않고 시도 횟수가 maxAttempts보다 적으면 횟수를 1 올리고 비밀번호 해시를 돌려준다.
-   * 확인과 증가를 한 번에 해서, 동시에 여러 요청이 와도 maxAttempts번까지만 통과한다.
+   * 잠겨 있지 않으면 시도 횟수를 1 올리고 비밀번호 해시를 돌려준다.
+   * 이번 시도로 maxAttempts에 닿으면 같은 순간에 lockMinutes분 잠근다. 잠금이 풀린 뒤에는 1부터 다시 센다.
+   * 확인 · 증가 · 잠금을 한 번에 해서, 동시 요청이나 도중에 끊긴 요청으로 횟수를 넘기거나 갇히지 않는다.
    */
-  reserveDeleteAttempt(id: string, maxAttempts: number): Promise<DeleteAttempt>;
-  /** 삭제를 lockMinutes분 동안 잠그고 시도 횟수를 0으로 되돌린다 */
-  lockDelete(id: string, lockMinutes: number): Promise<void>;
+  reserveDeleteAttempt(id: string, rule: DeleteLockRule): Promise<DeleteAttempt>;
   /** 지우고, 지운 행이 있었는지 돌려준다 */
   remove(id: string): Promise<boolean>;
 };

@@ -5,6 +5,7 @@ import 'server-only';
 //
 // 쿼리를 쓸 때 지킬 것
 // - `select *` 금지. password_hash · ip_hash가 응답에 실리지 않도록 공개할 컬럼만 고른다
+//   (서비스 안에서 비교만 하고 응답에 싣지 않는 경우는 예외: comments/postgres.ts의 reserveDeleteAttempt)
 // - 값은 sql`... ${value}` 템플릿으로만 넘긴다. sql.unsafe()에 문자열을 이어 붙이면 SQL 인젝션이 된다
 // - 연결 설정을 바꾸면 scripts/db-check.mjs도 같이 고친다 (server-only 때문에 그 스크립트가 이 파일을 import할 수 없다)
 
