@@ -46,7 +46,7 @@ npm run dev -- -H 192.168.0.12   # 예시. 내 IP는 시스템 설정 → 네트
 | `COMMENTS_USE_MOCK` | `false`로 적었을 때만 댓글을 실제 DB에 저장합니다. 없거나 다른 값이면 메모리 mock 저장소를 씁니다  |
 | `IP_HASH_SALT`      | (댓글 API 담당만) 댓글 작성자 IP 해시 키. `openssl rand -hex 32`로 만듭니다 (32자 이상)            |
 
-실제 API는 개인 GCP 프로젝트 키로만 테스트하고, 팀 키는 배포에만 씁니다. 배포 환경에는 `USE_MOCK=false`, `COMMENTS_USE_MOCK=false`를 반드시 설정합니다.
+실제 API는 개인 GCP 프로젝트 키로만 테스트하고, 팀 키는 배포에만 씁니다. 배포 환경에는 `USE_MOCK=false`, `COMMENTS_USE_MOCK=false`를 반드시 설정합니다. (아래 [배포](#배포) 참고)
 
 mock 모드에서 재현할 수 있는 상태(무한 스크롤, 결과 없음, 할당량 초과 등)는 [#4](https://github.com/lc-vidlab/vidlab-fe/issues/4)를 참고하세요. 예: 검색어 `__quota__`로 검색하면 할당량 초과 에러가 납니다.
 
@@ -111,6 +111,54 @@ if (!response.ok) {
   // error.fields?.nickname 등을 칸 아래에 표시
 }
 ```
+
+## 배포
+
+Vercel(무료 플랜)에 배포합니다. 결정 근거는 [#33](https://github.com/lc-vidlab/vidlab-fe/issues/33)을 참고하세요.
+
+```
+lc-vidlab/vidlab-fe (비공개, 작업 저장소)
+  develop ─(출시 PR, merge commit)→ main
+                                     │ GitHub Actions(mirror.yml)
+                                     ▼
+                       이주혁 개인 저장소 main (비공개)
+                                     │ Vercel Git 연동
+                                     ▼
+                                운영 배포 (icn1)
+```
+
+- Vercel 무료 플랜은 GitHub 조직의 비공개 저장소를 배포할 수 없어서, `main`만 개인 저장소로 복제해 배포합니다.
+- 개인 저장소가 비공개라 Vercel은 **커밋 작성자가 저장소 주인(이주혁)인 커밋만** 배포합니다.
+  - 출시는 이주혁이 develop → main PR을 **Create a merge commit**으로 병합합니다. (병합 커밋 작성자 = 병합한 사람)
+  - `main`에 직접 커밋하지 않습니다.
+  - PR별 미리보기 배포는 쓰지 않습니다. 확인은 로컬 개발 서버와 CI로 합니다.
+- 함수 지역은 서울(`icn1`, `vercel.json`)입니다. 댓글 DB(Supabase)는 뭄바이에 있어 댓글 API만 왕복이 조금 깁니다.
+
+### 운영 환경변수 (Vercel → Settings → Environment Variables)
+
+| 이름                | Production                             | Preview   |
+| ------------------- | -------------------------------------- | --------- |
+| `USE_MOCK`          | `false`                                | `false`   |
+| `YOUTUBE_API_KEY`   | 팀 키                                  | 팀 키     |
+| `COMMENTS_USE_MOCK` | `false`                                | `true`    |
+| `DATABASE_URL`      | Supabase Transaction pooler 주소(6543) | 넣지 않음 |
+| `IP_HASH_SALT`      | `openssl rand -hex 32`로 새로 만든 값  | 넣지 않음 |
+
+- `IP_HASH_SALT`는 로컬과 다른 값을 쓰고, 한 번 정하면 바꾸지 않습니다. (바꾸면 같은 IP를 알아보지 못합니다)
+- 키 · 주소는 `NEXT_PUBLIC_`을 붙이지 않습니다.
+
+### 복제 설정 (lc-vidlab/vidlab-fe → Settings → Secrets and variables → Actions)
+
+- 변수 `MIRROR_REPO`: 개인 저장소 `계정/저장소`
+- 비밀값 `MIRROR_TOKEN`: 개인 저장소 하나에만 **Contents: Read and write** 권한을 준 fine-grained 토큰
+- 둘 중 하나가 없으면 복제를 건너뜁니다. Actions 탭의 **Mirror main → Run workflow**로 직접 실행할 수도 있습니다.
+
+### 출시 순서
+
+1. develop의 CI가 초록 ✓인지 확인합니다.
+2. develop → main PR을 만들고 **Create a merge commit**으로 병합합니다 (이주혁).
+3. Actions의 **Mirror main**이 개인 저장소로 복제하고, Vercel이 운영 배포를 시작합니다.
+4. 배포 URL에서 홈 → 검색 → 상세 → 댓글 작성 · 삭제를 확인합니다.
 
 ## 폴더 구조
 
