@@ -54,14 +54,12 @@ function ChannelAvatar({ channel }: { channel: Channel }) {
   }
 
   return (
-    // 실제 API 아바타 도메인(yt3.ggpht.com)이 아직 remotePatterns에 없어서 최적화 없이 그대로 쓴다
-    // TODO(FEED-03): 이미지 도메인 등록되면 unoptimized 제거
+    // 아바타 도메인(yt3.ggpht.com, mock은 picsum.photos)은 next.config.ts의 images.remotePatterns에 등록돼 있다
     <Image
       src={channel.avatarUrl}
       alt=""
       width={40}
       height={40}
-      unoptimized
       className="bg-surface size-10 shrink-0 rounded-full object-cover"
     />
   );

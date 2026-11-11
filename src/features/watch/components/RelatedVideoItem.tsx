@@ -23,16 +23,8 @@ export function RelatedVideoItem({ video }: { video: Video }) {
       <Link href={`/watch/${video.id}`} className="group flex gap-2 rounded-lg">
         <div className="bg-surface relative aspect-video w-40 shrink-0 overflow-hidden rounded-lg">
           {video.thumbnailUrl && (
-            // 실제 API 썸네일 도메인(i.ytimg.com)이 아직 remotePatterns에 없어서 최적화 없이 쓴다
-            // TODO(FEED-03): 이미지 도메인 등록되면 unoptimized 제거
-            <Image
-              src={video.thumbnailUrl}
-              alt=""
-              fill
-              sizes="160px"
-              unoptimized
-              className="object-cover"
-            />
+            // 썸네일 도메인(i.ytimg.com, mock은 picsum.photos)은 next.config.ts의 images.remotePatterns에 등록돼 있다
+            <Image src={video.thumbnailUrl} alt="" fill sizes="160px" className="object-cover" />
           )}
           <span className="bg-bg text-text absolute right-1 bottom-1 rounded px-1 py-0.5 text-xs font-medium">
             {duration}
