@@ -4,7 +4,7 @@ YouTube Data API v3 기반 영상 탐색 웹 (토이 프로젝트, 4인 팀)
 
 ## 스택
 
-Next.js App Router · React · TypeScript · Tailwind CSS v4 · TanStack Query · next-themes · 댓글 DB는 Supabase(Postgres) 예정
+Next.js App Router · React · TypeScript · Tailwind CSS v4 · TanStack Query · next-themes · 댓글 DB는 Supabase(Postgres), `src/lib/db` · 댓글 API는 `src/lib/comments`
 
 ## 구조
 
@@ -31,6 +31,7 @@ Next.js App Router · React · TypeScript · Tailwind CSS v4 · TanStack Query �
 - 서비스명에 YouTube 이름 · 로고 사용 금지 (가칭: Vidlab)
 - 브랜치: `feature/{영역}-{기능}`, PR 리뷰 1명 이상
 - 커밋 전 `npm run lint`, `npm run format` 실행
+- PR은 CI(`.github/workflows/ci.yml`: lint · format:check · test · build)가 통과해야 병합. 개발 서버에서 되더라도 `npm run build`는 실패할 수 있다
 
 ## 문서
 
