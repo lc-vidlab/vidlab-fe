@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { CommentForm } from '@/features/watch/components/CommentForm';
+import { CommentSection } from '@/features/watch/components/CommentSection';
 import { VideoPlayer } from '@/features/watch/components/VideoPlayer';
 import { WatchLayout } from '@/features/watch/components/WatchLayout';
 import {
@@ -51,14 +51,9 @@ async function WatchContent({ id }: { id: string }) {
     <WatchLayout
       player={<VideoPlayer key={id} videoId={id} title={title} />}
       info={info}
-      comments={
-        <div className="flex flex-col gap-6">
-          {/* 영상이 바뀌면 입력 중이던 내용이 남지 않도록 key로 초기화 */}
-          <CommentForm key={id} />
-          {/* TODO(WATCH-06): Vidlab 댓글 목록 (YouTube 댓글 목록 WATCH-04는 범위에서 제외) */}
-          <CommentsSkeleton />
-        </div>
-      }
+      // 영상이 바뀌면 입력 중이던 내용 · 열린 삭제 창이 남지 않도록 key로 초기화
+      // (YouTube 댓글 목록 WATCH-04는 범위에서 제외)
+      comments={<CommentSection key={id} videoId={id} />}
       related={related}
     />
   );
