@@ -28,12 +28,14 @@ const PASSWORD_MAX_BYTES = 72;
 // - Cs: 짝이 없는 서로게이트. 올바른 UTF-8이 아니라 DB에 저장할 수 없다
 // - Co: 사용자 정의 영역. 글꼴마다 다르게 보이거나 빈칸으로 보인다
 // - M: 결합 문자 (앞 글자에 붙는 기호). 여러 개를 쌓으면 위아래 줄을 덮는다
+// - Zl · Zp: 줄 · 문단 구분 문자(U+2028, U+2029). 제어 문자가 아니지만 줄을 바꾼다
 // - 빈칸처럼 보이는 글자: 한글 채움 문자(U+115F, U+1160, U+3164, U+FFA0) · 점자 빈칸(U+2800) ·
 //   결합 자소 결합자(U+034F). 공백으로 취급되지 않아 trim()으로 지워지지 않는다
 // 보이지 않는 문자는 소스에 그대로 넣지 않고 \u 이스케이프로 쓴다 (편집기에서 보이지 않고 지워질 수 있다)
 
-/** 닉네임: 제어 · 서식 · 사용자 정의 문자와 빈칸처럼 보이는 글자를 모두 거부 */
-const NICKNAME_FORBIDDEN = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\u115F\u1160\u3164\uFFA0\u2800\u034F]/u;
+/** 닉네임: 제어 · 서식 · 사용자 정의 · 줄 구분 문자와 빈칸처럼 보이는 글자를 모두 거부 */
+const NICKNAME_FORBIDDEN =
+  /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}\u115F\u1160\u3164\uFFA0\u2800\u034F]/u;
 
 /**
  * 내용: 줄바꿈(\n) · 탭(\t)과 ZWJ(U+200D, 가족 이모지처럼 이모지 여러 개를 한 글자로 잇는 문자)는 허용.
@@ -48,10 +50,11 @@ const CONTENT_FORBIDDEN = /(?![\t\n\u200D])[\p{Cc}\p{Cf}\p{Cs}]/u;
 const VISIBLE_CHAR = /(?![\u115F\u1160\u3164\uFFA0\u2800])[\p{L}\p{N}\p{P}\p{S}]/u;
 
 /**
- * 결합 문자가 이만큼 연달아 붙으면 거부한다.
+ * 결합 문자가 5개 이상 연달아 붙으면 거부한다.
  * 정상 입력은 많아야 2~3개다 (예: 키캡 이모지 = 숫자 + U+FE0F + U+20E3)
+ * 사이에 ZWJ를 끼워도 화면에서는 같은 글자에 쌓이므로 ZWJ는 건너뛰고 센다.
  */
-const STACKED_MARKS = /\p{M}{5,}/u;
+const STACKED_MARKS = /\p{M}(?:\u200D*\p{M}){4,}/u;
 
 /** 비밀번호: 제어 문자 · 짝 없는 서로게이트 거부. 공백 · 서식 문자는 그대로 비밀번호로 취급 */
 const PASSWORD_FORBIDDEN = /[\p{Cc}\p{Cs}]/u;
@@ -74,9 +77,18 @@ function normalizeNickname(nickname: string): string {
   return nickname.normalize('NFC').trim();
 }
 
-/** 내용 정규화: NFC → 줄바꿈을 \n으로 통일 → 앞뒤 공백 제거 */
+/** 줄바꿈 표현들: CRLF · CR · 줄 구분(U+2028) · 문단 구분(U+2029) */
+const LINE_BREAKS = /\r\n?|[\u2028\u2029]/g;
+
+/** 빈 줄(공백만 있는 줄 포함)이 2개 이상 이어진 곳 */
+const BLANK_LINES = /\n(?:[^\S\n]*\n){2,}/g;
+
+/**
+ * 내용 정규화: NFC → 줄바꿈을 \n으로 통일 → 이어진 빈 줄을 1개로 → 앞뒤 공백 제거.
+ * 빈 줄만 수백 개 넣어 목록을 길게 차지하는 것을 막는다. 글자가 있는 줄이 많은 긴 댓글은 화면에서 줄 수로 접는다.
+ */
 function normalizeContent(content: string): string {
-  return content.normalize('NFC').replace(/\r\n?/g, '\n').trim();
+  return content.normalize('NFC').replace(LINE_BREAKS, '\n').replace(BLANK_LINES, '\n\n').trim();
 }
 
 /**

@@ -30,6 +30,8 @@ const COMBINING_ACUTE = '\u0301';
 const GRAPHEME_JOINER = '\u034F';
 const PRIVATE_USE = '\uE000';
 const ZWJ = '\u200D';
+const LINE_SEPARATOR = '\u2028';
+const PARAGRAPH_SEPARATOR = '\u2029';
 const FAMILY = `\u{1F468}${ZWJ}\u{1F469}${ZWJ}\u{1F467}`;
 /** NFD로 쓴 '가' (ㄱ + ㅏ) */
 const NFD_GA = '가';
@@ -78,6 +80,8 @@ describe('validateCommentInput', () => {
       ['결합 자소 결합자', `a${GRAPHEME_JOINER.repeat(2)}`],
       ['사용자 정의 영역', PRIVATE_USE.repeat(2)],
       ['결합 문자 5개 쌓기', `닉${COMBINING_ACUTE.repeat(5)}네임`],
+      ['줄 구분 문자', `닉${LINE_SEPARATOR}네임`],
+      ['문단 구분 문자', `닉${PARAGRAPH_SEPARATOR}네임`],
     ])('쓸 수 없는 문자: %s', (_, nickname) => {
       expect(errorsOf({ nickname }).nickname).toBe('닉네임에 쓸 수 없는 문자가 있어요.');
     });
@@ -140,6 +144,7 @@ describe('validateCommentInput', () => {
       ['ZWJ로 이은 가족 이모지', `가족 ${FAMILY}`],
       ['키캡 이모지 (결합 문자 2개)', '1\uFE0F\u20E3'],
       ['결합 문자 4개', `a${COMBINING_ACUTE.repeat(4)}`],
+      ['무지개 깃발 (U+FE0F 뒤 ZWJ)', '\u{1F3F3}\uFE0F\u200D\u{1F308}'],
     ])('받음: %s', (_, content) => {
       expect(errorsOf({ content })).toEqual({});
     });
@@ -162,6 +167,9 @@ describe('validateCommentInput', () => {
       ['NUL', '내용\u0000'],
       ['짝 없는 서로게이트', '내용\uDC00'],
       ['결합 문자 쌓기 (Zalgo)', `a${COMBINING_ACUTE.repeat(499)}`],
+      ['ZWJ를 끼운 결합 문자 쌓기', `a${`${COMBINING_ACUTE.repeat(4)}${ZWJ}`.repeat(99)}`],
+      // NFC가 'a' + 결합 문자를 한 글자로 합치므로 합쳐지지 않는 한글 뒤에 붙인다
+      ['ZWJ를 끼운 결합 문자 5개', `내${COMBINING_ACUTE}${ZWJ}${COMBINING_ACUTE.repeat(4)}`],
     ])('쓸 수 없는 문자: %s', (_, content) => {
       expect(errorsOf({ content }).content).toBe('댓글에 쓸 수 없는 문자가 있어요.');
     });
@@ -170,6 +178,19 @@ describe('validateCommentInput', () => {
       expect(valueOf({ content: '\r\n 첫 줄\r\n둘째 줄\r셋째 줄 \n' }).content).toBe(
         '첫 줄\n둘째 줄\n셋째 줄',
       );
+    });
+
+    it('줄 · 문단 구분 문자도 \\n으로 바꾼다', () => {
+      expect(
+        valueOf({ content: `첫 줄${LINE_SEPARATOR}둘째 줄${PARAGRAPH_SEPARATOR}셋째 줄` }).content,
+      ).toBe('첫 줄\n둘째 줄\n셋째 줄');
+    });
+
+    it('이어진 빈 줄은 1개로 줄인다 (공백만 있는 줄 포함)', () => {
+      expect(valueOf({ content: `a${'\n'.repeat(498)}b` }).content).toBe('a\n\nb');
+      expect(valueOf({ content: 'a\n  \n\t\n\r\n\nb' }).content).toBe('a\n\nb');
+      // 빈 줄 1개는 그대로
+      expect(valueOf({ content: 'a\n\nb\nc' }).content).toBe('a\n\nb\nc');
     });
   });
 
