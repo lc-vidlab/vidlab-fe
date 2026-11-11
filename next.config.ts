@@ -3,9 +3,6 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   cacheComponents: true,
 
-  // 내부망 개발 접속 허용
-  allowedDevOrigins: ['192.168.55.165'],
-
   images: {
     // new URL('https://host/**') 형식은 쿼리 문자열이 없는 주소만 허용한다 (search: ''로 처리됨).
     // 쿼리가 붙어 오는 주소는 객체 형식으로 쓰고 search를 생략한다 (#26)
