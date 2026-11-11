@@ -56,6 +56,8 @@ export type SearchOrder = 'relevance' | 'date' | 'viewCount';
 
 export type PopularVideosParams = {
   categoryId?: string;
+  /** ISO 3166-1 alpha-2 국가 코드. 기본값 KR */
+  regionCode?: string;
   pageToken?: string;
   /** 기본 24, 최대 50 */
   maxResults?: number;

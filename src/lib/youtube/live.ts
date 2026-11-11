@@ -112,7 +112,7 @@ export async function getPopularVideos(params: PopularVideosParams = {}): Promis
   const res = await ytFetch<YtListResponse<YtVideo>>('videos', {
     part: VIDEO_PARTS,
     chart: 'mostPopular',
-    regionCode: REGION_CODE,
+    regionCode: params.regionCode ?? REGION_CODE,
     videoCategoryId: params.categoryId,
     pageToken: params.pageToken,
     maxResults: pageSize(params.maxResults, PAGE_SIZE.popular),
