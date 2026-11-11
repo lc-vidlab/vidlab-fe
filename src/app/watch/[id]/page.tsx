@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { CommentSection } from '@/features/watch/components/CommentSection';
+import { NotEmbeddablePlayer } from '@/features/watch/components/PlayerNotice';
 import { VideoPlayer } from '@/features/watch/components/VideoPlayer';
 import { WatchLayout } from '@/features/watch/components/WatchLayout';
 import {
@@ -47,9 +48,18 @@ async function WatchContent({ id }: { id: string }) {
       </Suspense>
     ) : null;
 
+  // 외부 재생이 막힌 영상은 플레이어를 띄워 봐야 오류만 나므로 처음부터 안내를 보여준다.
+  // 정보를 못 가져왔으면 알 수 없으니 일단 플레이어를 띄운다 (막혀 있으면 플레이어가 오류 안내)
+  const player =
+    'video' in result && !result.video.embeddable ? (
+      <NotEmbeddablePlayer videoId={id} />
+    ) : (
+      <VideoPlayer key={id} videoId={id} title={title} />
+    );
+
   return (
     <WatchLayout
-      player={<VideoPlayer key={id} videoId={id} title={title} />}
+      player={player}
       info={info}
       // 영상이 바뀌면 입력 중이던 내용 · 열린 삭제 창이 남지 않도록 key로 초기화
       // (YouTube 댓글 목록 WATCH-04는 범위에서 제외)

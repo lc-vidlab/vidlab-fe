@@ -34,6 +34,20 @@ type CommentFormProps = {
 
 const NO_ERRORS: CommentFieldErrors = {};
 
+/**
+ * 칸별 오류가 아닌 등록 실패 안내 (WATCH-09).
+ * 작성 횟수 제한(CMT-05, 429)에 걸리면 이유를 먼저 알려주고, 기다릴 시간 등은 서버 문구를 붙인다.
+ */
+function submitErrorMessage(err: unknown): string {
+  if (!(err instanceof CommentRequestError)) {
+    return '댓글을 등록하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+  if (err.code === 'TOO_MANY_ATTEMPTS') {
+    return `짧은 시간에 댓글을 너무 많이 작성했어요. ${err.message}`;
+  }
+  return err.message;
+}
+
 /** Vidlab 익명 댓글 작성 폼 (WATCH-07). 입력 규칙은 서버와 같은 @/lib/comments/rules */
 export function CommentForm({ onSubmit }: CommentFormProps) {
   const id = useId();
@@ -97,13 +111,7 @@ export function CommentForm({ onSubmit }: CommentFormProps) {
       if (err instanceof CommentRequestError && err.code === 'VALIDATION_ERROR' && err.fields) {
         setServerErrors(err.fields);
       } else {
-        setMessage({
-          type: 'error',
-          text:
-            err instanceof CommentRequestError
-              ? err.message
-              : '댓글을 등록하지 못했어요. 잠시 후 다시 시도해 주세요.',
-        });
+        setMessage({ type: 'error', text: submitErrorMessage(err) });
       }
     } finally {
       setSubmitting(false);

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { loadIframeApi, type PlayerErrorCode } from '@/features/watch/lib/iframe-api';
-import { youtubeWatchUrl } from '@/features/watch/lib/video-id';
+import { PlayerNotice } from '@/features/watch/components/PlayerNotice';
 
 type Status =
   { type: 'loading' } | { type: 'ready' } | { type: 'error'; code: PlayerErrorCode | 'load' };
@@ -99,20 +99,7 @@ export function VideoPlayer({ videoId, title = '영상 플레이어', onError }:
       )}
 
       {status.type === 'error' && (
-        <div
-          className="bg-surface absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center"
-          role="alert"
-        >
-          <p className="text-text font-medium">{ERROR_MESSAGES[status.code]}</p>
-          <a
-            href={youtubeWatchUrl(videoId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent text-sm font-medium underline-offset-4 hover:underline"
-          >
-            YouTube에서 보기
-          </a>
-        </div>
+        <PlayerNotice videoId={videoId} message={ERROR_MESSAGES[status.code]} />
       )}
     </div>
   );
